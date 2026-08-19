@@ -253,6 +253,30 @@ def hotels(conn, city_ids, limit=None, skip_ids=()):
     return out
 
 
+def hotels_by_slug(conn, slugs):
+    """Explicit, named hotels -- the --slugs/--slugs-file CLI path.
+
+    Identical row shape to hotels() (same columns, same lat/lon float
+    coercion) so it can flow through exactly the same Phase 1/Phase 2
+    machinery without a special case anywhere downstream -- the only
+    difference is HOW the hotel set was chosen, not what a hotel record looks
+    like once chosen. City-agnostic on purpose: an operator naming a slug
+    already knows which hotel they mean, so there is no city to filter by.
+    """
+    if not slugs:
+        return []
+    q = ("SELECT id, slug, name_en AS name, address_en AS address, "
+         "latitude AS lat, longitude AS lon, city_id "
+         "FROM v2_common_hotels WHERE slug IN %s")
+    with conn.cursor() as cur:
+        _sql(cur, q, (tuple(slugs),))
+        rows = cur.fetchall()
+    for r in rows:
+        r["lat"] = float(r["lat"]) if r["lat"] is not None else None
+        r["lon"] = float(r["lon"]) if r["lon"] is not None else None
+    return rows
+
+
 def hotel_ids(conn, city_ids):
     """Just the ids. For counting//cross-referencing against the ledger, where
     pulling names, addresses and coordinates for thousands of hotels to then

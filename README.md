@@ -44,7 +44,39 @@ python -m pipeline.run --city Dubai --limit 20
 | `--rooms-from agoda\|both` | (needs `--city`) `both` (default): the real pipeline. `agoda`: a deliberately smaller, faster pass — see below |
 | `--dry-run` | do everything except upload images and write to MySQL. Does not take or need the run lock |
 | `--no-booking` | skip the Booking.com gap-fill (on by default) — see below |
+| `--plan-only` | discover and map every hotel, print the coverage summary, then stop — no image downloaded, nothing written to MySQL. See "Two phases" below |
 | `--selftest` | offline checks, no network, no database |
+
+### Two phases: discover, then commit — with a checkpoint and a gate between them
+
+Matching (Agoda + Booking) is cheap network calls; committing downloads and
+re-hosts real image bytes. They used to be interleaved per hotel, which made a
+hotel with a big gallery block the *next* hotel's matching behind its own image
+transfer — from the terminal that looks like the pipeline hung, when it's
+actually just downloading.
+
+A normal run now goes through Phase 1 (discover) for every hotel first,
+check-pointing each hotel's result to disk as it goes, THEN prints the exact
+same coverage summary this pipeline always printed at the end of a run —
+except now it's available before a single image has been downloaded. What
+happens next depends on how you're running it:
+
+- **`--dry-run`** always proceeds straight through (there's nothing to confirm
+  — Phase 2 writes nothing in that mode either).
+- **`--plan-only`** always stops right there. Nothing downloaded, nothing
+  published, but the discovery is durably check-pointed.
+- **Otherwise**, `--yes` or a non-interactive stdin (cron, CI) proceeds
+  automatically — it must never hang waiting for a keypress that isn't coming.
+  An attached terminal is asked `[y/N]`.
+
+The checkpoint (`out/cache/plan.csv`) is what makes stopping free: re-running
+the **same** command later — with or without `--plan-only` — picks up
+committing exactly where a prior invocation left off, with zero re-discovery.
+Say no to the gate, walk away, come back tomorrow, run the identical command:
+discovery is skipped entirely and you land straight back on the gate.
+
+The checkpoint is swept only once Phase 2 actually finishes committing it
+cleanly — same discipline as the Agoda property cache it lives alongside.
 
 ### Booking.com — second source, and the fallback when Agoda fails
 

@@ -313,6 +313,171 @@ def _load_probe_state(scope, live_rooms):
         return set(), set(), set()
 
 
+# --------------------------------------- stage 3a: discovery/commit split
+# Matching (Agoda + Booking) is cheap network calls; committing is downloading
+# and re-hosting real image bytes. Interleaving them per-hotel is why a hotel
+# with a big gallery makes the NEXT hotel's matching look stalled -- the
+# operator is actually watching image transfer, not discovery.
+#
+# So discovery runs for every hotel FIRST, writing what it finds to a plan
+# (this checkpoint), and only after that does a second pass mirror images and
+# publish. Same shape, same reasoning, as the Bookme probe checkpoint above:
+# resumable per unit of work, invalidated when the hotel set or the tuning
+# that produced it changes, discarded on a clean finish.
+#
+# Row-per-ROOM CSV, hotel columns repeated -- the same flat shape already used
+# for rooms_review.csv/rooms_unmatched.csv, not a new convention.
+PLAN_CACHE = os.path.join(CACHE, "plan.csv")
+PLAN_COLUMNS = ["city_id", "city_name", "hotel_id", "slug", "hotel_name",
+               "bm_label", "ag_count", "ag_source", "n_review", "n_unmatched",
+               "room_name", "category", "category_id", "size_sqft",
+               "source_images", "image_source"]
+
+
+def _plan_scope(hotels):
+    """Same load-bearing role as _probe_scope: a plan checkpoint is only valid
+    for the hotel set AND the matching/gap-fill tuning that produced it. A
+    config change (a tightened Booking gate, a new review threshold) must
+    invalidate a stale plan rather than silently reuse rooms matched under the
+    old rules."""
+    ids = sorted(h["id"] for h in hotels)
+    payload = json.dumps([ids, config.ROOM_ACCEPT, config.ROOM_REVIEW,
+                          config.BOOKING_MIN_NAME, config.BOOKING_MAX_KM,
+                          config.BOOKING_ENABLED],
+                         sort_keys=True).encode()
+    return hashlib.md5(payload).hexdigest()
+
+
+def _load_plan(scope):
+    """(rows_by_hotel_id, planned_hotel_ids) from a checkpoint, or ({}, set())
+    if there is none or it does not match this run's scope. Each value in
+    rows_by_hotel_id is that hotel's list of raw CSV row dicts, in the order
+    written -- reconstruction into room dicts happens at the CALL SITE
+    (Phase 1 preview vs Phase 2 commit want slightly different shapes from the
+    same rows), not here."""
+    if not os.path.exists(PLAN_CACHE):
+        return {}, set()
+    # csv.reader + manual width check, NOT csv.DictReader -- a torn last row
+    # (a crash mid-write) has FEWER fields than the header, and DictReader
+    # fills the missing ones with None rather than rejecting the row. That
+    # silently hands a room dict full of Nones into reconstruction instead of
+    # dropping the one row a crash actually damaged -- the same class of bug
+    # ledger.py's own loader was built to close (see its docstring), applied
+    # here rather than re-learned.
+    try:
+        with open(PLAN_CACHE, newline="", encoding="utf-8", errors="replace") as f:
+            raw = list(csv.reader(f))
+    except (OSError, csv.Error) as e:
+        print(f"  plan checkpoint unreadable ({type(e).__name__}); "
+              f"re-discovering fresh")
+        return {}, set()
+    if not raw:
+        return {}, set()
+    header, data = raw[0], raw[1:]
+    if header != PLAN_COLUMNS:
+        print("  plan checkpoint has a different schema; ignoring it "
+              "and re-discovering fresh")
+        return {}, set()
+    rows, skipped = [], 0
+    for fields in data:
+        if len(fields) != len(PLAN_COLUMNS):
+            skipped += 1
+            continue
+        rows.append(dict(zip(PLAN_COLUMNS, fields)))
+    if skipped:
+        print(f"  plan checkpoint: skipped {skipped} malformed row(s) (likely "
+              f"a torn write from an interrupted run); the rest loaded normally")
+    # The scope is not stored IN the CSV (a hotel-by-hotel row shape has
+    # nowhere clean to put a single run-wide value without repeating it on
+    # every row); it lives in a sidecar instead, exactly like PROBE_CACHE's
+    # `scope` field but out-of-band since this file's shape is tabular.
+    scope_path = PLAN_CACHE + ".scope"
+    try:
+        with open(scope_path, encoding="utf-8") as f:
+            saved_scope = f.read().strip()
+    except OSError:
+        saved_scope = None
+    if saved_scope != scope:
+        print("  plan checkpoint is for a different hotel set or matching "
+              "config; ignoring it and re-discovering fresh")
+        return {}, set()
+    by_hotel = {}
+    for r in rows:
+        try:
+            hid = int(r["hotel_id"])
+        except ValueError:
+            continue          # right width, garbage id -- corrupt, not fatal
+        by_hotel.setdefault(hid, []).append(r)
+    return by_hotel, set(by_hotel)
+
+
+def _save_plan_scope(scope):
+    os.makedirs(CACHE, exist_ok=True)
+    with open(PLAN_CACHE + ".scope", "w", encoding="utf-8") as f:
+        f.write(scope)
+
+
+def _append_plan_rows(hotel, to_publish, bm_label, ag_count, ag_source,
+                      n_review, n_unmatched):
+    """Check-point ONE hotel's discovery result. Called immediately after that
+    hotel's mapping finishes, never batched -- discovery's per-hotel cost is
+    already dominated by network round-trips, so a per-hotel fsync is cheap
+    against that, and it is the tightest resumability granularity available:
+    a crash loses at most the hotel in flight, never a whole batch.
+
+    Plain append, not the temp-file+os.replace dance _save_probe_state uses --
+    that protects a REWRITE of the whole file; this only ever grows it, so the
+    worst a crash mid-write can do is a torn LAST row, which _load_plan's
+    csv.DictReader simply drops (short row, KeyError on read -- caught in the
+    per-hotel reconstruction, not here) -- the same tolerance ledger.py already
+    relies on for its own append-only files.
+    """
+    os.makedirs(CACHE, exist_ok=True)
+    new = not os.path.exists(PLAN_CACHE)
+    with open(PLAN_CACHE, "a", newline="", encoding="utf-8") as f:
+        w = csv.DictWriter(f, fieldnames=PLAN_COLUMNS)
+        if new:
+            w.writeheader()
+        for r in to_publish:
+            w.writerow({
+                "city_id": hotel["city_id"], "city_name": hotel.get("city_name", ""),
+                "hotel_id": hotel["id"], "slug": hotel.get("slug", ""),
+                "hotel_name": hotel.get("name", ""),
+                "bm_label": bm_label, "ag_count": ag_count, "ag_source": ag_source,
+                "n_review": n_review, "n_unmatched": n_unmatched,
+                "room_name": r["name"], "category": r["category"],
+                "category_id": r["category_id"], "size_sqft": r["size_sqft"],
+                "source_images": "|".join(r["source_images"]),
+                "image_source": r.get("image_source", "")})
+        f.flush()
+        os.fsync(f.fileno())
+
+
+def _room_from_plan_row(r, cat_ids):
+    """One plan.csv row -> a _room()-shaped dict. Mirrors
+    _room_from_review_row exactly -- same reconstruction, different source
+    file, so a Phase 2 commit produces category_id the identical way a live
+    run always has (re-classified from cat_ids, never trusted verbatim off
+    disk, in case cat_ids itself changed between the plan and the commit)."""
+    images = [u for u in (r.get("source_images") or "").split("|") if u]
+    size = r.get("size_sqft") or None
+    room = _room(r["room_name"], images, cat_ids, size_sqft=int(size) if size else None)
+    room["image_source"] = r.get("image_source", "")
+    return room
+
+
+def _phase2_skip_ids(led):
+    """Hotel ids Phase 2 should NOT re-walk: published AND with no open
+    issue. Same rule the top of main() already applies when selecting `todo`
+    in the first place -- a hotel that published but still owes some rooms a
+    picture (`needs_image_backfill`) must stay in play, not be skipped as if
+    it were finished. Read fresh at call time, not a value captured earlier:
+    an arbitrary amount of time, or an earlier Phase 2 attempt within the
+    SAME invocation's deferred-retry pass, may have published hotels since.
+    """
+    return led.fresh_ids() - led.unresolved_ids()
+
+
 def probe_shapes(shapes):
     """Config's (weeks_out, adults, nights) tuples -> concrete probe params.
 
@@ -1484,6 +1649,190 @@ def selftest():
     _selftest_mapping(cats)
     _selftest_booking_fill(cats)
     _selftest_agoda_breaker()
+    _selftest_plan_checkpoint(cats)
+    _selftest_cli_targeting()
+
+
+def _selftest_plan_checkpoint(cats):
+    """The Phase 1/Phase 2 handoff: what gets written, what a reload sees, and
+    the two ways a stale checkpoint must be refused rather than trusted.
+
+    Redirects CACHE/PLAN_CACHE to a temp dir for the whole section, same
+    reasoning as _selftest_harvest: this must not read or write the real run's
+    checkpoint, and must not depend on whether one exists.
+    """
+    import tempfile as _tf
+    real_cache, real_plan = CACHE, PLAN_CACHE
+    _tmpdir = _tf.mkdtemp()
+    globals()["CACHE"] = _tmpdir
+    globals()["PLAN_CACHE"] = os.path.join(_tmpdir, "plan.csv")
+    try:
+        h1 = {"id": 501, "city_id": 1280, "city_name": "Dubai",
+             "slug": "hotel-a", "name": "Hotel A"}
+        rooms1 = [_room("King Room", ["https://agoda/k.jpg"], cats, size_sqft=280),
+                  _room("Twin Room", [], cats)]
+        _append_plan_rows(h1, rooms1, "5", 2, "http", 1, 0)
+
+        h2 = {"id": 502, "city_id": 1280, "city_name": "Dubai",
+             "slug": "hotel-b", "name": "Hotel B"}
+        rooms2 = [_room("Suite", ["https://b/1.jpg", "https://b/2.jpg"], cats)]
+        rooms2[0]["image_source"] = "booking"          # not agoda's own default
+        _append_plan_rows(h2, rooms2, "3", 0, "no_agoda_match", 0, 0)
+
+        scope = _plan_scope([h1, h2])
+        _save_plan_scope(scope)
+
+        # -- round trip: what got written is what comes back -------------------
+        by_hotel, planned_ids = _load_plan(scope)
+        assert planned_ids == {501, 502}, planned_ids
+        assert len(by_hotel[501]) == 2 and len(by_hotel[502]) == 1, by_hotel
+
+        r1 = [_room_from_plan_row(r, cats) for r in by_hotel[501]]
+        by_name = {r["name"]: r for r in r1}
+        assert by_name["King Room"]["source_images"] == ["https://agoda/k.jpg"], by_name
+        assert by_name["King Room"]["size_sqft"] == 280, by_name["King Room"]
+        assert by_name["King Room"]["image_source"] == "agoda", by_name["King Room"]
+        assert by_name["Twin Room"]["source_images"] == [], by_name["Twin Room"]
+
+        r2 = [_room_from_plan_row(r, cats) for r in by_hotel[502]]
+        assert r2[0]["source_images"] == ["https://b/1.jpg", "https://b/2.jpg"], r2
+        # THE CONTRACT THAT MATTERS HERE: provenance survives the round trip.
+        # _room()'s own default would call any non-empty image list "agoda" --
+        # a plan row must override that with what was actually recorded, or a
+        # coverage report reads every booking-sourced room as an agoda one.
+        assert r2[0]["image_source"] == "booking", (
+            f"image_source was not preserved across the plan round trip: {r2[0]}")
+
+        # -- resumability: an already-planned hotel is skippable ---------------
+        # This is the exact filter Phase 1 applies to `work1` -- asserted
+        # directly rather than by re-running all of main().
+        todo = [h1, h2, {"id": 503, "city_id": 1280, "slug": "hotel-c", "name": "Hotel C"}]
+        work1 = [h for h in todo if h["id"] not in planned_ids]
+        assert [h["id"] for h in work1] == [503], (
+            f"a hotel already check-pointed was re-offered to discovery: {work1}")
+
+        # -- scope invalidation: a DIFFERENT hotel set must not reuse this plan
+        other_scope = _plan_scope([h1])              # h2 missing -> different scope
+        assert other_scope != scope, "scope is not sensitive to the hotel set"
+        by_hotel2, planned_ids2 = _load_plan(other_scope)
+        assert by_hotel2 == {} and planned_ids2 == set(), (
+            "a plan for a different hotel set was accepted as current")
+
+        # -- scope invalidation: matching TUNING must also invalidate --------
+        # A tightened Booking gate or review threshold changed which rooms
+        # WOULD have been matched; reusing rooms matched under the old rules
+        # would silently publish a decision the current config disagrees with.
+        real_min_name = config.BOOKING_MIN_NAME
+        config.BOOKING_MIN_NAME = real_min_name + 1
+        try:
+            tuning_scope = _plan_scope([h1, h2])
+        finally:
+            config.BOOKING_MIN_NAME = real_min_name
+        assert tuning_scope != scope, (
+            "plan scope is blind to matching config, not just the hotel set")
+
+        # -- a torn last row is dropped, not fatal, same tolerance as ledger.py
+        with open(PLAN_CACHE, "a", encoding="utf-8") as f:
+            f.write("1280,Dubai,999,torn-slug,Torn Hote")   # short row, no newline
+        by_hotel3, planned_ids3 = _load_plan(scope)
+        assert 501 in by_hotel3 and 502 in by_hotel3, (
+            "a torn trailing row lost the good ones")
+        assert 999 not in planned_ids3, "a torn row was accepted as a real hotel"
+    finally:
+        globals()["CACHE"], globals()["PLAN_CACHE"] = real_cache, real_plan
+        shutil.rmtree(_tmpdir, ignore_errors=True)
+    print("OK: plan checkpoint round-trips rooms (images, size, category, "
+          "provenance), skips already-planned hotels on resume, and is "
+          "invalidated by a different hotel set OR a changed matching config")
+    _selftest_phase2_resume()
+
+
+def _selftest_phase2_resume():
+    """The other half of resumability: Phase 2 must not RE-WALK a hotel an
+    earlier attempt already finished, against a REAL Ledger (not a stand-in),
+    so this proves the actual `led.fresh_ids()`/`unresolved_ids()` shapes
+    _phase2_skip_ids() depends on, not an assumption about them.
+
+    Three hotels, three different real states a resumed Phase 2 must tell
+    apart -- this is exactly the CPO-facing requirement: re-invoking after a
+    crash must skip what's genuinely done, keep what still owes a picture,
+    and never mistake one for the other.
+    """
+    import tempfile as _tf
+    real_pub, real_unres = ledger.PUBLISHED_PATH, ledger.UNRESOLVED_PATH
+    _tmpdir = _tf.mkdtemp()
+    ledger.PUBLISHED_PATH = os.path.join(_tmpdir, "p.csv")
+    ledger.UNRESOLVED_PATH = os.path.join(_tmpdir, "u.csv")
+    try:
+        led = ledger.open_ledger()
+        done = {"id": 701, "city_id": 1280, "slug": "done-hotel", "name": "Done"}
+        needs_pic = {"id": 702, "city_id": 1280, "slug": "needs-pic", "name": "Needs Pic"}
+        # id 703 is never published at all -- must also survive (not in
+        # skip_ids just because it was never touched)
+
+        led.mark_published(done, "run1", 5, 5)
+        led.mark_published(needs_pic, "run1", 3, 1)
+        led.mark_unresolved(needs_pic, "run1", "needs_image_backfill",
+                            "2 room(s) published without a thumbnail this run")
+
+        skip = _phase2_skip_ids(led)
+        assert 701 in skip, "a fully-published, fully-resolved hotel was NOT skipped"
+        assert 702 not in skip, (
+            "a hotel still owing an image backfill was skipped as if finished -- "
+            "a resumed Phase 2 would silently leave it incomplete forever")
+        assert 703 not in skip, "a never-attempted hotel was skipped"
+
+        # a fresh Ledger() reload (simulating the NEXT process) must agree
+        led2 = ledger.open_ledger()
+        assert _phase2_skip_ids(led2) == skip, "skip set did not survive a reload"
+    finally:
+        ledger.PUBLISHED_PATH, ledger.UNRESOLVED_PATH = real_pub, real_unres
+        shutil.rmtree(_tmpdir, ignore_errors=True)
+    print("OK: a resumed Phase 2 skips hotels already published AND resolved, "
+          "keeps ones still owing an image backfill, and survives a reload")
+
+
+def _selftest_cli_targeting():
+    """--slugs/--slugs-file parsing and the wizard's offset/range parsing --
+    both pure, both offline, both exercised directly rather than only through
+    a live CLI invocation."""
+    import tempfile as _tf
+
+    # -- slug list: inline, file, union, de-dup, order preserved, comments --
+    assert _parse_slug_list("a,b,c", None) == ["a", "b", "c"]
+    assert _parse_slug_list(" a , b ,,c ", None) == ["a", "b", "c"], (
+        "whitespace/empty entries must not survive")
+    assert _parse_slug_list("a,b,a", None) == ["a", "b"], "duplicates must collapse"
+    with _tf.NamedTemporaryFile("w", suffix=".txt", delete=False) as f:
+        f.write("hotel-x\n# a comment line\n\nhotel-y  # trailing comment\nhotel-x\n")
+        path = f.name
+    try:
+        assert _parse_slug_list(None, path) == ["hotel-x", "hotel-y"], (
+            "file parsing must skip blanks/comments and strip trailing comments")
+        assert _parse_slug_list("a,hotel-x", path) == ["a", "hotel-x", "hotel-y"], (
+            "--slugs and --slugs-file must UNION, not one replacing the other")
+    finally:
+        os.remove(path)
+
+    # -- wizard bound/range parsing --------------------------------------
+    assert _parse_bound_reply("all") == (None, 0)
+    assert _parse_bound_reply("  ALL ") == (None, 0), "case/whitespace insensitive"
+    assert _parse_bound_reply("25") == (25, 0)
+    assert _parse_bound_reply("0") is _BOUND_INVALID, "zero is not a valid count"
+    assert _parse_bound_reply("-5") is _BOUND_INVALID
+    # THE FEATURE THAT MATTERS: "1000-1564" -> (count=564, offset=1000), a
+    # POSITION in this city's own list, never a raw database id.
+    assert _parse_bound_reply("1000-1564") == (564, 1000), _parse_bound_reply("1000-1564")
+    assert _parse_bound_reply("1000:1564") == (564, 1000), "':' must work like '-'"
+    assert _parse_bound_reply(" 10 - 20 ") == (10, 10), "range tolerates spacing"
+    assert _parse_bound_reply("1564-1000") is _BOUND_INVALID, (
+        "a backwards range (end <= start) must be rejected, not silently negative")
+    assert _parse_bound_reply("5-5") is _BOUND_INVALID, "an empty range must be rejected"
+    assert _parse_bound_reply("banana") is _BOUND_INVALID
+
+    print("OK: --slugs/--slugs-file union+dedupe+comments, wizard range "
+          "parsing ('1000-1564' -> offset=1000 count=564), rejects zero/"
+          "negative/backwards/empty ranges")
 
 
 def _selftest_agoda_breaker():
@@ -2229,6 +2578,33 @@ class _Back(Exception):
     step back exactly one question."""
 
 
+def _parse_slug_list(inline, path):
+    """--slugs and --slugs-file, unioned, order-preserving, de-duplicated.
+
+    Blank lines and '#' comments are ignored in the file so an operator can
+    keep a curated, annotated list around rather than a bare one-per-line
+    dump. Order is preserved (not sorted) because the log's per-hotel
+    progress lines are easier to follow against a list the operator
+    recognises the order of.
+    """
+    out, seen = [], set()
+
+    def add(s):
+        s = s.strip()
+        if s and s not in seen:
+            seen.add(s)
+            out.append(s)
+
+    for s in (inline or "").split(","):
+        add(s)
+    if path:
+        with open(path, encoding="utf-8") as f:
+            for line in f:
+                line = line.split("#", 1)[0]
+                add(line)
+    return out
+
+
 def _ask(prompt, back=True):
     hint = " ['b' back, 'q' quit]" if back else " ['q' quit]"
     raw = input(f"{prompt}{hint}: ").strip()
@@ -2261,12 +2637,45 @@ def _city_runnable(conn, led, city_id, fresh_ids=None):
     return len(ids), n_fresh, len(ids) - n_fresh
 
 
+_RANGE_RE = re.compile(r"^\s*(\d+)\s*[-:]\s*(\d+)\s*$")
+
+
+_BOUND_INVALID = object()          # sentinel: distinct from a valid (None, 0) == "all"
+
+
+def _parse_bound_reply(reply):
+    """'all' / a positive count / an 'A-B' or 'A:B' range -> (bound, offset).
+    Returns _BOUND_INVALID for anything unrecognised, so the wizard step can
+    re-ask with the same message rather than duplicating the parsing rules at
+    the call site -- `bound is _BOUND_INVALID` is the only check a caller
+    needs, never a bare `is None` (that's the valid "all" case).
+
+    The range is a POSITION within this city's own list (the same order
+    --limit alone already walks, v2_common_hotels.id ascending), never a raw
+    database id -- ids are global across every city, so a literal id range
+    would not even stay inside the chosen one.
+    """
+    reply = reply.strip()
+    if reply.lower() == "all":
+        return None, 0
+    if reply.isdigit() and int(reply) > 0:
+        return int(reply), 0
+    m = _RANGE_RE.match(reply)
+    if m:
+        start, end = int(m.group(1)), int(m.group(2))
+        if end > start:
+            return end - start, start
+    return _BOUND_INVALID
+
+
 def _wizard(conn, led):
     """Interactive city + scope picker, for when the operator did not pass
     --city. Every question accepts 'b' to step back one question and 'q' to
-    quit outright. Returns (chosen_cities, city_query, limit_or_None, rooms_from).
+    quit outright. Returns
+    (chosen_cities, city_query, limit_or_None, offset, rooms_from).
     """
-    step, city_query, matches, chosen, stats, bound = 0, None, None, None, None, None
+    step, city_query, matches, chosen, stats = 0, None, None, None, None
+    bound, offset = None, 0
     while True:
         try:
             if step == 0:
@@ -2315,14 +2724,18 @@ def _wizard(conn, led):
                 if runnable == 0:
                     print("  nothing runnable -- every hotel in scope was "
                           "published within the staleness window")
-                reply = _ask(f"run all {runnable} runnable hotels, or bound to "
-                             f"N? ['all' or a number]")
-                if reply.lower() == "all":
-                    bound = None
-                elif reply.isdigit() and int(reply) > 0:
-                    bound = int(reply)
-                else:
-                    print("  enter 'all' or a positive number")
+                reply = _ask(f"run all {runnable} runnable hotels, bound to N, "
+                             f"or a range 'A-B'? ['all', a number, or e.g. "
+                             f"'1000-1564' for the 1000th through 1564th of "
+                             f"this list]")
+                bound, offset = _parse_bound_reply(reply)
+                if bound is _BOUND_INVALID:
+                    print("  enter 'all', a positive number, or a range like "
+                          "'1000-1564'")
+                    continue
+                if offset and offset >= runnable:
+                    print(f"  {offset} is past the {runnable} runnable hotels "
+                          f"in scope -- nothing would be selected, try again")
                     continue
                 # NOT a question. Bookme's own supplier room names are always
                 # pulled -- this pipeline's whole premise is to cover
@@ -2333,7 +2746,7 @@ def _wizard(conn, led):
                 # credentials configured yet) -- see main()'s AuthFailed
                 # handling, which degrades to it automatically and loudly if
                 # that happens mid-run, never by silently defaulting to it.
-                return chosen, city_query, bound, "both"
+                return chosen, city_query, bound, offset, "both"
         except _Back:
             step = max(0, step - 1)
 
@@ -2476,6 +2889,35 @@ def main(argv=None):
                     help="shuffle the hotel selection before applying the "
                          "limit (a representative demo sample instead of the "
                          "lowest ids)")
+    ap.add_argument("--offset", type=int, default=0,
+                    help="(needs --city) skip the first N hotels of the "
+                         "selection before applying --limit -- e.g. "
+                         "--offset 1000 --limit 564 processes the 1000th "
+                         "through 1564th hotel of this city's own list "
+                         "(ordered by v2_common_hotels.id, the SAME order "
+                         "--limit alone already uses). NOT a raw database id "
+                         "range -- ids are global across every city, so this "
+                         "is a position within the chosen city's list, not "
+                         "literal id values")
+    ap.add_argument("--slugs", metavar="SLUG1,SLUG2,...",
+                    help="run against these exact hotels by slug, looked up "
+                         "directly in v2_common_hotels -- no --city, no "
+                         "wizard, no ledger-freshness skip (naming a hotel "
+                         "explicitly means process it now, regardless of "
+                         "when it last ran). Combine with --slugs-file to "
+                         "union both lists")
+    ap.add_argument("--slugs-file", metavar="PATH",
+                    help="same as --slugs, one slug per line ('#' comments "
+                         "and blank lines ignored) -- for a list too long to "
+                         "type on the command line")
+    ap.add_argument("--plan-only", action="store_true",
+                    help="discover and map every hotel (Agoda + booking.com, "
+                         "same as a real run), print the coverage summary, "
+                         "then STOP -- no image is downloaded, nothing is "
+                         "written to MySQL. The discovery is check-pointed, so "
+                         "re-running the same command later (with or without "
+                         "this flag) picks up committing exactly where this "
+                         "left off, without re-discovering anything")
     ap.add_argument("--apply-reviews", metavar="CSV",
                     help="apply human decisions from a rooms_review.csv (a "
                          "'decision' cell of yes/approve) and exit -- no "
@@ -2499,12 +2941,34 @@ def main(argv=None):
                                        # on any exit path, crash included
         return 1 if failed and not applied else 0
 
-    # --city-id/--yes/--rooms-from/--limit only mean anything as pre-answers to
-    # questions the wizard would otherwise ask -- silently ignoring them would
-    # be a worse experience than refusing to guess which the operator wanted.
-    if a.city is None and (a.city_id or a.yes or a.rooms_from or a.limit is not None):
-        ap.error("--city-id/--yes/--rooms-from/--limit need --city; omit "
-                 "--city with none of those to use the interactive wizard")
+    if a.slugs or a.slugs_file:
+        # An explicit hotel list is a THIRD mode, alongside the wizard and
+        # --city -- it bypasses city scope entirely, so the flags that only
+        # mean anything as part of choosing a city are refused rather than
+        # silently ignored, same reasoning as the check below.
+        conflicting = [f for f, v in (("--city", a.city), ("--city-id", a.city_id),
+                                      ("--limit", a.limit), ("--offset", a.offset),
+                                      ("--random", a.random)) if v]
+        if conflicting:
+            ap.error(f"--slugs/--slugs-file name the hotels directly and "
+                     f"cannot be combined with {', '.join(conflicting)}")
+    else:
+        # --city-id/--yes/--rooms-from/--limit/--offset only mean anything as
+        # pre-answers to questions the wizard would otherwise ask -- silently
+        # ignoring them would be a worse experience than refusing to guess
+        # which the operator wanted.
+        if a.city is None and (a.city_id or a.yes or a.rooms_from
+                               or a.limit is not None or a.offset or a.random):
+            ap.error("--city-id/--yes/--rooms-from/--limit/--offset/--random "
+                     "need --city; omit --city with none of those to use the "
+                     "interactive wizard")
+        if a.offset and not a.limit:
+            ap.error("--offset needs --limit -- an unbounded run has no "
+                     "range to offset into")
+        if a.offset and a.random:
+            ap.error("--offset and --random cannot be combined -- offsetting "
+                     "into a list that gets reshuffled every run is not a "
+                     "stable range")
 
     signal.signal(signal.SIGINT, _on_sigint)
     signal.signal(signal.SIGTERM, _on_sigterm)
@@ -2517,8 +2981,35 @@ def main(argv=None):
     led = ledger.open_ledger()
 
     # -- scope ---------------------------------------------------------------
-    if a.city is None:
-        chosen, city_query, a.limit, a.rooms_from = _wizard(conn, led)
+    explicit_hotels = None          # set below only in --slugs/--slugs-file mode
+    if a.slugs or a.slugs_file:
+        slugs = _parse_slug_list(a.slugs, a.slugs_file)
+        if not slugs:
+            raise SystemExit("--slugs/--slugs-file resolved to an empty list")
+        explicit_hotels, conn = db.with_retry(
+            conn, lambda c: db.hotels_by_slug(c, slugs), what="slug lookup")
+        found = {h["slug"] for h in explicit_hotels}
+        missing = [s for s in slugs if s not in found]
+        if missing:
+            print(f"  NOTE: {len(missing)} slug(s) not found in "
+                 f"v2_common_hotels, skipping: {missing}")
+        if not explicit_hotels:
+            raise SystemExit("none of the given slugs matched a hotel")
+        city_ids = sorted({h["city_id"] for h in explicit_hotels})
+        # destination/country are resolved from the FIRST matched hotel's
+        # city, purely for match_hotel()'s address-stripping hint and the
+        # Agoda destination lookup -- consistent with how a --city selection
+        # spanning multiple city_ids (e.g. "Dubai" = 1280 AND 9658) already
+        # only ever uses chosen[0] for these, not a new limitation.
+        chosen = [c for c in db.resolve_city(conn, str(explicit_hotels[0]["city_id"]))
+                 if c["id"] == explicit_hotels[0]["city_id"]]
+        city_query = f"{len(slugs)} explicit slug(s)"
+        if a.rooms_from is None:
+            a.rooms_from = "both"
+        print(f"\n{len(explicit_hotels)}/{len(slugs)} slug(s) matched, spanning "
+             f"city_id(s) {city_ids}")
+    elif a.city is None:
+        chosen, city_query, a.limit, a.offset, a.rooms_from = _wizard(conn, led)
     else:
         city_query = a.city
         matches = db.resolve_city(conn, a.city)
@@ -2565,7 +3056,12 @@ def main(argv=None):
             f"{city_query!r} matched a city, but no matching city has any "
             f"hotels in v2_common_hotels -- nothing to run.")
 
-    city_ids = [c["id"] for c in chosen]
+    # In --slugs/--slugs-file mode, city_ids was already set to the FULL
+    # distinct set spanning every matched hotel's city -- `chosen` only ever
+    # holds the first one (for destination/country purposes), so rebuilding
+    # city_ids from it here would silently drop every other city.
+    if explicit_hotels is None:
+        city_ids = [c["id"] for c in chosen]
     destination = (chosen[0]["name_en"] or city_query).title()
     print(f"\nrun {run_id}: {destination} -> city_ids {city_ids}")
 
@@ -2601,31 +3097,53 @@ def main(argv=None):
     # now serves both: `all_hotels` retains every row, `todo` is filtered from
     # it in Python instead of inside `db.hotels()`.
     #
-    # A random sample needs the full candidate list before truncating -- the
-    # earlier Python-side limit would otherwise hand back the lowest ids, in
-    # id order, which is a biased sample (older/earlier-onboarded hotels only).
-    all_hotels, conn = db.with_retry(
-        conn, lambda c: db.hotels(c, city_ids), what="hotel fetch")
-    here = {r["id"] for r in all_hotels}
-    todo = [r for r in all_hotels if r["id"] not in skip_ids]
-    if a.random:
-        random.shuffle(todo)
-    todo = todo[:a.limit] if a.limit else todo
-    total_in_city = sum(c["hotels"] for c in chosen)
-    # `fresh`/`skip_ids` are GLOBAL sets (every hotel ever published, in any
-    # city). Printing their size next to this city's scope read as "N hotels
-    # of THIS city were skipped" when it actually meant "N hotels exist in the
-    # ledger worldwide" -- a Vienna run reported 8 skipped when all 8 were in
-    # Buenos Aires and no Vienna hotel was skipped at all. Scope it before
-    # printing, and count backfill-only re-inclusions separately so a whole
-    # city's staleness picture is not silently understated as "0 skipped".
-    skipped_here = len(here & skip_ids)
-    backfill_here = len(here & fresh & led.unresolved_ids())
-    print(f"hotels: {total_in_city} in scope, {skipped_here} already published "
-          f"within {config.LEDGER_STALE_DAYS} days (skipped), {len(todo)} to "
-          f"process" + (f" (--limit {a.limit})" if a.limit else "")
-          + (f"; {backfill_here} of those still needed a backfilled image, "
-             f"so were included anyway" if backfill_here else ""))
+    if explicit_hotels is not None:
+        # --slugs/--slugs-file: EXACTLY these hotels, unconditionally. Naming
+        # a hotel explicitly is a request to process it NOW -- silently
+        # skipping it because a run happened to touch it recently would defeat
+        # the entire point of naming it (a demo, a spot-check, a deliberate
+        # re-run on one broken hotel).
+        all_hotels = explicit_hotels
+        here = {r["id"] for r in all_hotels}
+        todo = all_hotels
+        total_in_city = len(all_hotels)
+        print(f"hotels: {len(todo)} explicit hotel(s), ledger freshness "
+             f"ignored (named hotels always run)")
+    else:
+        # A random sample needs the full candidate list before truncating --
+        # the earlier Python-side limit would otherwise hand back the lowest
+        # ids, in id order, which is a biased sample (older/earlier-onboarded
+        # hotels only).
+        all_hotels, conn = db.with_retry(
+            conn, lambda c: db.hotels(c, city_ids), what="hotel fetch")
+        here = {r["id"] for r in all_hotels}
+        todo = [r for r in all_hotels if r["id"] not in skip_ids]
+        if a.random:
+            random.shuffle(todo)
+        # --offset N --limit M: the (offset+1)th through (offset+M)th hotel of
+        # THIS city's own list, in the same id order --limit alone already
+        # uses -- NOT a raw v2_common_hotels.id range (ids are global across
+        # every city, so a literal id range would not even stay within this
+        # city). Argparse already refuses --offset without --limit.
+        todo = todo[a.offset:a.offset + a.limit] if a.limit else todo
+        total_in_city = sum(c["hotels"] for c in chosen)
+        # `fresh`/`skip_ids` are GLOBAL sets (every hotel ever published, in
+        # any city). Printing their size next to this city's scope read as "N
+        # hotels of THIS city were skipped" when it actually meant "N hotels
+        # exist in the ledger worldwide" -- a Vienna run reported 8 skipped
+        # when all 8 were in Buenos Aires and no Vienna hotel was skipped at
+        # all. Scope it before printing, and count backfill-only
+        # re-inclusions separately so a whole city's staleness picture is not
+        # silently understated as "0 skipped".
+        skipped_here = len(here & skip_ids)
+        backfill_here = len(here & fresh & led.unresolved_ids())
+        print(f"hotels: {total_in_city} in scope, {skipped_here} already "
+             f"published within {config.LEDGER_STALE_DAYS} days (skipped), "
+             f"{len(todo)} to process"
+             + (f" (--offset {a.offset} --limit {a.limit})" if a.offset else
+                f" (--limit {a.limit})" if a.limit else "")
+             + (f"; {backfill_here} of those still needed a backfilled "
+                f"image, so were included anyway" if backfill_here else ""))
     if not todo:
         raise SystemExit("nothing to do")
 
@@ -2752,6 +3270,14 @@ def main(argv=None):
               # of a run double-count: a hotel can be BOTH "no_agoda_match" AND
               # "hotels_done" at once, and nothing said so.
               "hotels_published_without_agoda": 0}
+    # hotels_mapped vs hotels_done: discovery succeeding and the DB commit
+    # succeeding are different claims, now genuinely separated by phase --
+    # hotels_mapped is set in Phase 1 (this hotel produced a plan, whether or
+    # not Phase 2 later runs at all), hotels_done stays exactly what it always
+    # meant, set only after Phase 2 actually commits it. Conflating them would
+    # have broken _print_human_summary's own reconciliation check the moment a
+    # hotel was mapped but a commit later failed non-transiently.
+    counts["hotels_mapped"] = 0
     img_session = requests.Session()
 
     # The booking.com session is built ONCE, here, so its WAF token is minted
@@ -2831,28 +3357,55 @@ def main(argv=None):
               "builds a URL that cannot land, which would report hotels as "
               "having no rooms. HTTP and the escalation ladder still run.")
 
-    # A SECOND Ctrl-C landing HERE (the per-hotel loop) is caught the same
-    # way as the two setup-phase sites above -- `aborted_immediately` is
-    # already declared, shared across all three, so whichever site catches it
-    # lands on the identical report path below. The loop stays inline (not
-    # factored into its own function) specifically so `conn` reassignments
-    # from a mid-loop MySQL reconnect keep working exactly as before --
-    # passing `conn` across a function boundary would have made a rebind
-    # inside invisible to this scope.
+    # A SECOND Ctrl-C landing during either phase below is caught the same way
+    # as the two setup-phase sites above -- `aborted_immediately` is already
+    # declared, shared across all sites, so whichever one catches it lands on
+    # the identical report path further down. Both loops stay inline (not
+    # factored into functions) specifically so `conn` reassignments from a
+    # mid-loop MySQL reconnect keep working exactly as before -- passing
+    # `conn` across a function boundary would have made a rebind inside
+    # invisible to this scope.
+    #
+    # ======================================================================
+    # PHASE 1 -- DISCOVER. Match every hotel against Agoda, gap-fill against
+    # Booking, decide what would be published. No image is downloaded here
+    # and nothing is written to MySQL -- this phase is exactly what a
+    # --dry-run has always computed, just no longer entangled with the slow
+    # part. Its output is a PLAN, checkpointed per hotel (see PLAN_CACHE), so
+    # a crash here loses at most the hotel in flight and a re-invocation skips
+    # straight past anything already discovered.
+    # ======================================================================
+    plan_scope = _plan_scope(todo)
+    planned_rows, planned_ids = _load_plan(plan_scope)
+    if planned_ids:
+        print(f"\nplan checkpoint: {len(planned_ids)} hotel(s) already "
+              f"discovered, resuming")
+    _save_plan_scope(plan_scope)
+    # Set here, not just inside the loop below: work1 can be entirely empty
+    # (every hotel in `todo` already check-pointed by a prior run), in which
+    # case the loop body never executes at all and this default is what
+    # survives -- correctly zero, not an unbound-variable crash.
+    hotels_planned = 0
     try:
-        # `work` starts as `todo` but is APPENDED to when a hotel fails on a
-        # transient database fault -- enumerate() over a list picks up items
-        # added during iteration, so the retry happens at the END of the run,
-        # after the outage that caused it has had time to pass. `deferred`
-        # caps this at one retry per hotel, so a permanently-sick hotel cannot
-        # spin the loop forever.
-        work, deferred = list(todo), []
+        # Same reasoning as the commit loop's own work/deferred below, one
+        # stage earlier: a transient DB fault (the existing_rooms() gap-scope
+        # read) earns one retry at the end of THIS phase, not an abandoned
+        # hotel that already paid for its Bookme probes and Agoda ladder.
+        work1 = [h for h in todo if h["id"] not in planned_ids]
+        deferred1 = []
         agoda_sick = 0                 # consecutive hotels Agoda could not be ASKED about
-        for i, h in enumerate(work, 1):
+        for i, h in enumerate(work1, 1):
+            # Set on every iteration, not read back from `i` after the loop:
+            # work1 can be EMPTY (every hotel in `todo` already check-pointed
+            # by a prior interrupted run), in which case the loop body below
+            # never executes and `i` is never bound in this scope at all --
+            # unlike the single-loop original, `todo` being non-empty no
+            # longer guarantees this loop runs even once.
+            hotels_planned = i
             if _STOP:
-                print(f"stopping after {i - 1} hotels as requested")
+                print(f"stopping discovery after {i - 1} hotels as requested")
                 break
-            tag = f"[{i}/{len(work)}] {(h['name'] or '')[:38]:40}"
+            tag = f"[{i}/{len(work1)}] {(h['name'] or '')[:38]:40}"
             revisit_row = functools.partial(_revisit_row, revisit, run_id, h,
                                             len(probe_log))
             try:
@@ -2928,8 +3481,8 @@ def main(argv=None):
                     print(f"\n  !! STOPPING: Agoda has been unreachable for "
                           f"{agoda_sick} consecutive hotels. Continuing would "
                           f"spend hours producing empty results. Everything "
-                          f"published so far is committed; re-run the same city "
-                          f"later and the ledger resumes where this stopped.\n")
+                          f"discovered so far is check-pointed; re-run the same "
+                          f"city later and discovery resumes where this stopped.\n")
                     agoda_dead = True
                     break
 
@@ -2939,10 +3492,9 @@ def main(argv=None):
                 # The existing-room snapshot is read BEFORE the gap-fill, not
                 # after: a room the database already has a picture for is not a
                 # gap, and asking Booking about it would buy a page (or several)
-                # whose results `_split_for_mirroring` is about to discard
-                # anyway. Same reasoning as the wasted-work fix below, one stage
-                # earlier -- and it matters most on a re-run, where most of a
-                # hotel's rooms are already imaged.
+                # whose results are about to be discarded anyway -- a room this
+                # informs is re-checked FRESH in Phase 2 regardless (see there),
+                # this read is scoping ONLY, never trusted for what gets written.
                 existing = {}
                 if not a.dry_run:
                     existing, conn = db.with_retry(
@@ -2973,187 +3525,54 @@ def main(argv=None):
                 # derived from mirroring, which a dry run never performs, and so
                 # reads 0 no matter how bad coverage actually is. This is the
                 # number an A/B or a coverage check can actually compare.
-                counts["rooms_with_candidate_images"] += sum(
-                    1 for r in to_publish if r["source_images"])
-                counts["rooms_without_candidate_images"] += sum(
-                    1 for r in to_publish if not r["source_images"])
+                with_photo = sum(1 for r in to_publish if r["source_images"])
+                without_photo = len(to_publish) - with_photo
+                counts["rooms_with_candidate_images"] += with_photo
+                counts["rooms_without_candidate_images"] += without_photo
 
                 room_id = {"run_id": run_id, "city_id": h["city_id"], "city_name": destination,
                           "hotel_id": h["id"], "slug": h["slug"], "hotel_name": h["name"]}
                 review_rows.extend({**room_id, **r} for r in review)
                 unmatched_rows.extend({**room_id, **r} for r in unmatched)
 
-                if a.dry_run:
-                    uploaded = 0
-                    for r in to_publish:
-                        r.setdefault("thumbnail", None)
-                        r.setdefault("images", [])
-                    need_mirror = to_publish
-                else:
-                    # WASTED-WORK FIX: mirroring used to run for every candidate
-                    # room unconditionally, THEN db.publish() checked which ones
-                    # were already complete and skipped them. That meant a room
-                    # already fully imaged in the DB still paid a full
-                    # download-from-Agoda + upload-to-COS round trip for every one
-                    # of its candidate photos, for nothing -- measured live on a
-                    # backfill re-run of 2 hotels: 577 images mirrored to actually
-                    # backfill 2 rooms, with 112 already-complete rooms mirrored
-                    # right alongside them for no benefit at all. The fact that a
-                    # room is already imaged is available BEFORE mirroring, from
-                    # the exact same query db.publish() was already going to run
-                    # -- so it is fetched once (just above, before the gap-fill)
-                    # and passed forward instead of being computed twice.
-                    need_mirror, already_imaged = _split_for_mirroring(
-                        to_publish, existing)
-                    uploaded = mirror_all_images(need_mirror, img_session)
-                    to_publish = need_mirror + already_imaged
-                counts["images_uploaded"] += uploaded
-                # A room that HAD candidate image urls but ended up with no
-                # thumbnail means every one of them failed to mirror (dead link,
-                # too small, not actually an image -- see cos.mirror). That failure
-                # is real and currently invisible: the room still gets a v2_rooms
-                # row, silently indistinguishable from case 2 (genuinely no
-                # candidate at all). Surfaced here rather than swallowed.
-                #
-                # Scoped to `need_mirror`, not the full `to_publish`: a room in
-                # `already_imaged` was deliberately never attempted (the DB says
-                # it already has a picture), which is not a mirror failure and
-                # must not be counted, logged or scheduled for revisit as one.
-                no_image_now = 0 if a.dry_run else sum(
-                    1 for r in need_mirror if r["source_images"] and not r["thumbnail"])
-                counts["rooms_published_with_no_image"] += no_image_now
-                # Scheduling an early revisit (before LEDGER_STALE_DAYS) is only
-                # for a missing IMAGE, not a missing size_sqft on its own -- a
-                # revisit re-runs the full match_hotel()/agoda_rooms() cycle
-                # (Agoda suggest, geo-verify, the escalation ladder, potentially
-                # the Bookme search), real cost, to chase a secondary display
-                # field. `need_mirror` already contains every unmatched room (case
-                # 2 in the write contract -- a row with no image either), so this
-                # single pass over it is the whole imageless count; it is not
-                # `no_image_now + len(unmatched)`, which would double-count them.
-                #
-                # size_sqft still backfills for free whenever a hotel IS revisited
-                # for any other reason (db.publish()'s COALESCE update fills
-                # whichever of the two fields a room is missing, independently,
-                # in the same write) -- only the SCHEDULING trigger is image-only.
-                imageless_this_hotel = sum(
-                    1 for r in need_mirror if not r.get("thumbnail"))
-
-                if a.dry_run:
-                    n_rooms, n_att, skip_old, skip_dup, backfilled = \
-                        len(to_publish), 0, 0, 0, 0
-                else:
-                    try:
-                        n_rooms, n_att, skip_old, skip_dup, backfilled = db.publish(
-                            conn, h, to_publish, existing=existing)
-                    except db.TRANSIENT as e:
-                        # A city run is hours long; a single dropped connection
-                        # somewhere in the middle is a normal network event, not a
-                        # reason to fail every hotel after it. pymysql does not
-                        # auto-reconnect (ping(reconnect=True) is deprecated in
-                        # this version -- confirmed, it silently does nothing), so
-                        # a broken conn stays broken for every later hotel unless
-                        # something replaces it.
-                        #
-                        # db.reconnect() retries with backoff rather than connecting
-                        # once: the reconnect attempt lands during the SAME outage
-                        # that broke the connection, so a single try usually fails
-                        # too -- and used to leave `conn` bound to the dead socket,
-                        # failing every remaining hotel in the run. Retrying the
-                        # publish is safe because it is one all-or-nothing
-                        # transaction that a broken connection cannot have
-                        # committed, and is idempotent besides.
-                        print(f"{tag}  MySQL connection dropped ({e}); "
-                              f"reconnecting and retrying this hotel once")
-                        conn = db.reconnect(conn)
-                        # No `existing=` here, deliberately: that snapshot was read
-                        # before the outage, and correctness on this rare retry
-                        # path matters more than saving one query -- let publish()
-                        # re-derive it fresh from the new connection.
-                        n_rooms, n_att, skip_old, skip_dup, backfilled = db.publish(
-                            conn, h, to_publish)
-                    led.mark_published(h, run_id, n_rooms, uploaded)
-                    # Written AFTER mark_published, not instead of it: this hotel
-                    # DID publish successfully (fresh_ids() should skip it next
-                    # time), but it also still owes some rooms a picture, so it
-                    # must NOT wait out the full 365-day staleness window like a
-                    # fully-complete hotel would. Append-only + last-row-wins (see
-                    # ledger.py) means this later write is what a future read sees
-                    # -- exactly the ordering that makes both true at once.
-                    if imageless_this_hotel:
-                        led.mark_unresolved(
-                            h, run_id, "needs_image_backfill",
-                            f"{imageless_this_hotel} room(s) published without a "
-                            f"thumbnail this run")
-                counts["rooms_inserted"] += n_rooms
-                counts["attachments_inserted"] += n_att
-                counts["rooms_skipped_existing"] += skip_old
-                counts["rooms_skipped_duplicate_name"] += skip_dup
-                counts["rooms_backfilled"] += backfilled
-                counts["hotels_done"] += 1
-                # "not queried", "Bookme says not sellable" and "asked on every
-                # shape and got nothing" are three different claims about the world.
-                # Collapsing them to the same "bookme=0" is exactly the silent-zero
-                # failure mode this audit exists to catch, so the log says which.
+                # ---- check-point this hotel's plan ----------------------------
                 bm_label = ("n/a" if a.rooms_from != "both"
                             else f"{len(bm_rooms)}" if bm_rooms
                             else "0(unsellable)" if h["id"] in unavailable_ids
                             else "0(verified)" if h["id"] in resolved_ids
                             else "0(no answer)")
-                # {n_rooms} routinely EXCEEDS {len(ag_rooms)}: agoda's count is
-                # distinct PHYSICAL rooms it has photos for, while a published
-                # row is one per bookme SELLABLE NAME, and bookme sells one
-                # physical room under many names (rate plans, refundable vs
-                # not, package-rate suffixes -- see D-10). Read cold in a
-                # terminal, "agoda=19 -> 58 rooms" looks like an inflated or
-                # broken count; it is 19 photo sets reused across 58 names. The
-                # note only appears when it would actually be needed to explain
-                # the gap -- the common case (n_rooms == len(ag_rooms)) is
-                # silent, exactly as before.
-                share_note = (
-                    f" [{n_rooms} bookme names share {len(ag_rooms)} agoda "
-                    f"room photos -- rate-plan duplicates, not an error]"
-                    if ag_rooms and n_rooms > len(ag_rooms) else "")
+                _append_plan_rows(
+                    {"id": h["id"], "city_id": h["city_id"],
+                     "city_name": destination, "slug": h["slug"], "name": h["name"]},
+                    to_publish, bm_label, len(ag_rooms), source,
+                    len(review), len(unmatched))
+                counts["hotels_mapped"] += 1
                 print(f"{tag} bookme={bm_label:>10} agoda={len(ag_rooms):>2}"
-                      f"({source}) -> {n_rooms} rooms{share_note}, {uploaded} images, "
-                      f"{len(review)} review, {len(unmatched)} unmatched"
-                      + (f", {skip_old} from a previous run" if skip_old else "")
-                      + (f", {skip_dup} duplicate name(s) dropped" if skip_dup else "")
-                      + (f", {backfilled} backfilled" if backfilled else "")
-                      + (f", {imageless_this_hotel} still need a picture"
-                         if imageless_this_hotel and not a.dry_run else "")
-                      # A dry run never mirrors, so every room's `thumbnail` is
-                      # None and `imageless_this_hotel` is ALWAYS the full room
-                      # count -- it read "26 still need a picture" even for a
-                      # hotel Booking had just filled completely. That is a
-                      # measurement of the dry-run mode, not of the hotel.
-                      # Report the candidate-image count instead, which is the
-                      # thing a dry run can actually observe.
-                      + (f", {sum(1 for r in to_publish if not r['source_images'])}"
-                         f" of {len(to_publish)} without a candidate image"
-                         if a.dry_run else ""))
+                      f"({source}) -> mapped {len(to_publish)} rooms "
+                      f"({with_photo} with candidate photo), {len(review)} review, "
+                      f"{len(unmatched)} unmatched")
             except KeyboardInterrupt:
                 raise
             except Exception as e:
                 # A hotel that dies here has ALREADY paid for its Bookme probes,
                 # its Agoda match and its whole escalation ladder -- the most
-                # expensive work in the run. Abandoning it on a transient
+                # expensive work in this phase. Abandoning it on a transient
                 # database fault throws all of that away and leaves a permanent
                 # hole in the city. Measured: 16 hotels lost exactly this way in
                 # the 2026-08-13 full-city run.
                 #
-                # A TRANSIENT fault earns one deferred retry at the end of the
-                # run, by which time the outage that caused it has usually
+                # A TRANSIENT fault earns one deferred retry at the end of this
+                # phase, by which time the outage that caused it has usually
                 # passed. Anything else (a real bug in mapping, a bad payload)
                 # is NOT retried -- re-running it would just fail identically
                 # and hide the defect behind a second identical error line.
                 detail = f"{type(e).__name__}: {e}"
                 transient = isinstance(e, db.TRANSIENT + (db.WriteLockTimeout,))
-                if transient and h["id"] not in {x["id"] for x in deferred}:
-                    deferred.append(h)
-                    work.append(h)          # picked up by this same loop, at the end
+                if transient and h["id"] not in {x["id"] for x in deferred1}:
+                    deferred1.append(h)
+                    work1.append(h)         # picked up by this same loop, at the end
                     print(f"{tag} deferred after {type(e).__name__} "
-                          f"(will retry at end of run)")
+                          f"(will retry at end of discovery)")
                 else:
                     counts["hotels_error"] += 1
                     revisit_row("error", detail)
@@ -3162,17 +3581,311 @@ def main(argv=None):
     except KeyboardInterrupt:
         aborted_immediately = True
         _STOP = True                # `global _STOP` already declared above
-        print("\n  aborted immediately -- writing whatever results were "
-              "already earned before exiting")
+        print("\n  aborted immediately during discovery -- writing whatever "
+              "results were already earned before exiting")
 
-    # Captured NOW, not read later: the report section below reuses the name
-    # `i` for its own, unrelated enumerate() loops over review_rows and
-    # unmatched_rows, which would silently clobber the hotel loop's index --
-    # exactly the kind of stale-variable bug that produces a confidently
-    # wrong number instead of an error. `todo` is guaranteed non-empty (see
-    # the early SystemExit above), so the loop ran at least one iteration and
-    # `i` is always bound here.
-    hotels_reached = i
+    # rooms_review/rooms_unmatched are complete the moment Phase 1 ends --
+    # nothing after this point ever touches review_rows/unmatched_rows -- so
+    # they are set HERE, once, rather than re-derived at report time. That
+    # makes the early preview below and the final report agree by construction
+    # instead of by two call sites happening to compute the same thing twice.
+    counts["rooms_review"] = len(review_rows)
+    counts["rooms_unmatched"] = len(unmatched_rows)
+
+    # ==========================================================================
+    # THE GATE. Everything Phase 2 needs is now either check-pointed to
+    # PLAN_CACHE (this invocation's own discoveries) or was already there from
+    # a prior interrupted run (planned_rows, loaded above) -- so the summary
+    # below is not a forecast computed separately from Phase 2's real work, it
+    # is read from the exact same counters Phase 2 will finish updating. A
+    # dry run always proceeds (Phase 2 writes nothing in that mode, so there is
+    # nothing to confirm); --plan-only always stops here; otherwise --yes or a
+    # non-interactive stdin proceeds automatically, and an attached terminal is
+    # asked.
+    # ==========================================================================
+    have_plan = bool(planned_ids) or counts["hotels_mapped"] > 0
+    if have_plan and not aborted_immediately:
+        _print_human_summary(
+            {**counts, "hotels_done": counts["hotels_mapped"]},
+            len(planned_ids | {h["id"] for h in todo[:hotels_planned]}),
+            destination, a.rooms_from)
+        print("\n(discovery only -- no image downloaded, nothing written to "
+             "MySQL yet)")
+    proceed = have_plan and not aborted_immediately and not a.plan_only
+    if proceed and not a.dry_run and not a.yes:
+        if sys.stdin.isatty():
+            reply = input("\nProceed to download images and publish to MySQL? "
+                          "[y/N] ").strip().lower()
+            proceed = reply in ("y", "yes")
+            if not proceed:
+                print("stopping here -- the plan is check-pointed; re-run the "
+                      "same command to pick up right where this left off")
+        else:
+            # No terminal to ask -- automation (cron, a CI job) must not hang
+            # on input() forever. Proceeding is the SAME default --yes already
+            # gives an attended run; a piped/redirected stdin is not consent
+            # to skip the gate, it is simply nowhere to show it.
+            print("\nno interactive terminal attached -- proceeding to Phase 2 "
+                 "automatically (pass --plan-only to always stop here instead)")
+
+    if not proceed:
+        hotels_reached = hotels_planned
+    else:
+        # ======================================================================
+        # PHASE 2 -- COMMIT. Read the plan back (this run's own discoveries plus
+        # anything a prior interrupted run already check-pointed), mirror each
+        # room's images, publish. Nothing here touches Agoda, Bookme or
+        # Booking -- every fact it needs was already resolved in Phase 1.
+        # ======================================================================
+        plan_rows, plan_ids = _load_plan(plan_scope)
+        # A hotel already committed by an EARLIER Phase 2 attempt (this run
+        # crashed and is being resumed, or --plan-only was used and someone
+        # committed part of it separately) must not be re-walked. Re-processing
+        # it would be SAFE -- existing_rooms() would find nothing left to
+        # mirror and db.publish() is a no-op -- but it is not FREE: a full-city
+        # resume would re-query and re-print a line for every hotel already
+        # done, drowning the one signal that actually matters (what's still
+        # pending) under noise, which is exactly the "make me look at
+        # something" experience an unattended resume must not have. Read fresh,
+        # not the `fresh`/`skip_ids` computed at the top of main() -- an
+        # arbitrary amount of time, and possibly an earlier Phase 2 attempt in
+        # THIS same invocation's retry pass, may have published hotels since.
+        already_done = _phase2_skip_ids(led)
+        by_hotel = {}
+        for hid, rows in plan_rows.items():
+            if hid in already_done:
+                continue
+            first = rows[0]
+            by_hotel[hid] = {
+                "hotel": {"id": hid, "city_id": first["city_id"],
+                         "city_name": first["city_name"], "slug": first["slug"],
+                         "name": first["hotel_name"]},
+                "to_publish": [_room_from_plan_row(r, cat_ids) for r in rows],
+                "bm_label": first["bm_label"], "ag_count": first["ag_count"],
+                "ag_source": first["ag_source"],
+                "n_review": int(first["n_review"] or 0),
+                "n_unmatched": int(first["n_unmatched"] or 0)}
+        skipped_done = len(plan_ids) - len(by_hotel)
+        if skipped_done:
+            print(f"\n{skipped_done} hotel(s) in the plan are already published "
+                 f"and resolved -- resuming with the remaining {len(by_hotel)}")
+        work2 = list(by_hotel.values())
+        deferred2 = []
+        try:
+            for i, entry in enumerate(work2, 1):
+                if _STOP:
+                    print(f"stopping commit after {i - 1} hotels as requested")
+                    break
+                h = entry["hotel"]
+                to_publish = entry["to_publish"]
+                tag = f"[{i}/{len(work2)}] {(h['name'] or '')[:38]:40}"
+                revisit_row = functools.partial(_revisit_row, revisit, run_id, h,
+                                                len(probe_log))
+                try:
+                    # Re-read fresh, never the Phase 1 snapshot: an arbitrary
+                    # amount of time (and possibly another run's writes) may
+                    # have passed between discovery and this commit.
+                    existing = {}
+                    if not a.dry_run:
+                        existing, conn = db.with_retry(
+                            conn, lambda c: db.existing_rooms(c, h["id"]),
+                            what="existing-room check")
+
+                    if a.dry_run:
+                        uploaded = 0
+                        for r in to_publish:
+                            r.setdefault("thumbnail", None)
+                            r.setdefault("images", [])
+                        need_mirror = to_publish
+                    else:
+                        # WASTED-WORK FIX: mirroring used to run for every
+                        # candidate room unconditionally, THEN db.publish()
+                        # checked which ones were already complete and skipped
+                        # them. That meant a room already fully imaged in the
+                        # DB still paid a full download-from-source +
+                        # upload-to-COS round trip for every one of its
+                        # candidate photos, for nothing -- measured live on a
+                        # backfill re-run of 2 hotels: 577 images mirrored to
+                        # actually backfill 2 rooms, with 112 already-complete
+                        # rooms mirrored right alongside them for no benefit at
+                        # all. The fact that a room is already imaged is
+                        # available BEFORE mirroring, from the exact same query
+                        # db.publish() was already going to run -- so it is
+                        # fetched once, above, and passed forward instead of
+                        # being computed twice.
+                        need_mirror, already_imaged = _split_for_mirroring(
+                            to_publish, existing)
+                        uploaded = mirror_all_images(need_mirror, img_session)
+                        to_publish = need_mirror + already_imaged
+                    counts["images_uploaded"] += uploaded
+                    # A room that HAD candidate image urls but ended up with no
+                    # thumbnail means every one of them failed to mirror (dead
+                    # link, too small, not actually an image -- see cos.mirror).
+                    # That failure is real and currently invisible: the room
+                    # still gets a v2_rooms row, silently indistinguishable from
+                    # case 2 (genuinely no candidate at all). Surfaced here
+                    # rather than swallowed.
+                    #
+                    # Scoped to `need_mirror`, not the full `to_publish`: a room
+                    # in `already_imaged` was deliberately never attempted (the
+                    # DB says it already has a picture), which is not a mirror
+                    # failure and must not be counted, logged or scheduled for
+                    # revisit as one.
+                    no_image_now = 0 if a.dry_run else sum(
+                        1 for r in need_mirror if r["source_images"] and not r["thumbnail"])
+                    counts["rooms_published_with_no_image"] += no_image_now
+                    # Scheduling an early revisit (before LEDGER_STALE_DAYS) is
+                    # only for a missing IMAGE, not a missing size_sqft on its
+                    # own -- a revisit re-runs the full discovery cycle (Agoda
+                    # suggest, geo-verify, the escalation ladder, potentially the
+                    # Bookme search), real cost, to chase a secondary display
+                    # field. `need_mirror` already contains every unmatched room
+                    # (case 2 in the write contract -- a row with no image
+                    # either), so this single pass over it is the whole
+                    # imageless count; it is not `no_image_now + n_unmatched`,
+                    # which would double-count them.
+                    #
+                    # size_sqft still backfills for free whenever a hotel IS
+                    # revisited for any other reason (db.publish()'s COALESCE
+                    # update fills whichever of the two fields a room is
+                    # missing, independently, in the same write) -- only the
+                    # SCHEDULING trigger is image-only.
+                    imageless_this_hotel = sum(
+                        1 for r in need_mirror if not r.get("thumbnail"))
+
+                    if a.dry_run:
+                        n_rooms, n_att, skip_old, skip_dup, backfilled = \
+                            len(to_publish), 0, 0, 0, 0
+                    else:
+                        try:
+                            n_rooms, n_att, skip_old, skip_dup, backfilled = db.publish(
+                                conn, h, to_publish, existing=existing)
+                        except db.TRANSIENT as e:
+                            # A city run is hours long; a single dropped
+                            # connection somewhere in the middle is a normal
+                            # network event, not a reason to fail every hotel
+                            # after it. pymysql does not auto-reconnect
+                            # (ping(reconnect=True) is deprecated in this
+                            # version -- confirmed, it silently does nothing),
+                            # so a broken conn stays broken for every later
+                            # hotel unless something replaces it.
+                            #
+                            # db.reconnect() retries with backoff rather than
+                            # connecting once: the reconnect attempt lands
+                            # during the SAME outage that broke the connection,
+                            # so a single try usually fails too -- and used to
+                            # leave `conn` bound to the dead socket, failing
+                            # every remaining hotel in the run. Retrying the
+                            # publish is safe because it is one all-or-nothing
+                            # transaction that a broken connection cannot have
+                            # committed, and is idempotent besides.
+                            print(f"{tag}  MySQL connection dropped ({e}); "
+                                  f"reconnecting and retrying this hotel once")
+                            conn = db.reconnect(conn)
+                            # No `existing=` here, deliberately: that snapshot
+                            # was read before the outage, and correctness on
+                            # this rare retry path matters more than saving one
+                            # query -- let publish() re-derive it fresh from the
+                            # new connection.
+                            n_rooms, n_att, skip_old, skip_dup, backfilled = db.publish(
+                                conn, h, to_publish)
+                        led.mark_published(h, run_id, n_rooms, uploaded)
+                        # Written AFTER mark_published, not instead of it: this
+                        # hotel DID publish successfully (fresh_ids() should
+                        # skip it next time), but it also still owes some rooms
+                        # a picture, so it must NOT wait out the full 365-day
+                        # staleness window like a fully-complete hotel would.
+                        # Append-only + last-row-wins (see ledger.py) means this
+                        # later write is what a future read sees -- exactly the
+                        # ordering that makes both true at once.
+                        if imageless_this_hotel:
+                            led.mark_unresolved(
+                                h, run_id, "needs_image_backfill",
+                                f"{imageless_this_hotel} room(s) published "
+                                f"without a thumbnail this run")
+                    counts["rooms_inserted"] += n_rooms
+                    counts["attachments_inserted"] += n_att
+                    counts["rooms_skipped_existing"] += skip_old
+                    counts["rooms_skipped_duplicate_name"] += skip_dup
+                    counts["rooms_backfilled"] += backfilled
+                    counts["hotels_done"] += 1
+                    # {n_rooms} routinely EXCEEDS {ag_count}: agoda's count is
+                    # distinct PHYSICAL rooms it has photos for, while a
+                    # published row is one per bookme SELLABLE NAME, and bookme
+                    # sells one physical room under many names (rate plans,
+                    # refundable vs not, package-rate suffixes -- see D-10).
+                    # Read cold in a terminal, "agoda=19 -> 58 rooms" looks like
+                    # an inflated or broken count; it is 19 photo sets reused
+                    # across 58 names. The note only appears when it would
+                    # actually be needed to explain the gap -- the common case
+                    # (n_rooms == ag_count) is silent, exactly as before.
+                    ag_count = int(entry["ag_count"] or 0)
+                    share_note = (
+                        f" [{n_rooms} bookme names share {ag_count} agoda "
+                        f"room photos -- rate-plan duplicates, not an error]"
+                        if ag_count and n_rooms > ag_count else "")
+                    print(f"{tag} bookme={entry['bm_label']:>10} agoda={ag_count:>2}"
+                          f"({entry['ag_source']}) -> {n_rooms} rooms{share_note}, "
+                          f"{uploaded} images, {entry['n_review']} review, "
+                          f"{entry['n_unmatched']} unmatched"
+                          + (f", {skip_old} from a previous run" if skip_old else "")
+                          + (f", {skip_dup} duplicate name(s) dropped" if skip_dup else "")
+                          + (f", {backfilled} backfilled" if backfilled else "")
+                          + (f", {imageless_this_hotel} still need a picture"
+                             if imageless_this_hotel and not a.dry_run else "")
+                          # A dry run never mirrors, so every room's `thumbnail`
+                          # is None and `imageless_this_hotel` is ALWAYS the
+                          # full room count -- it read "26 still need a
+                          # picture" even for a hotel Booking had just filled
+                          # completely. That is a measurement of the dry-run
+                          # mode, not of the hotel. Report the candidate-image
+                          # count instead, which is the thing a dry run can
+                          # actually observe.
+                          + (f", {sum(1 for r in to_publish if not r['source_images'])}"
+                             f" of {len(to_publish)} without a candidate image"
+                             if a.dry_run else ""))
+                except KeyboardInterrupt:
+                    raise
+                except Exception as e:
+                    # A hotel that dies here has ALREADY paid for its Bookme
+                    # probes, its Agoda match and its whole escalation ladder --
+                    # the most expensive work in the run, and it survived Phase
+                    # 1 intact. Abandoning it on a transient database fault
+                    # throws all of that away and leaves a permanent hole in
+                    # the city. Measured: 16 hotels lost exactly this way in the
+                    # 2026-08-13 full-city run.
+                    #
+                    # A TRANSIENT fault earns one deferred retry at the end of
+                    # this phase, by which time the outage that caused it has
+                    # usually passed. Anything else (a real bug in mapping, a
+                    # bad payload) is NOT retried -- re-running it would just
+                    # fail identically and hide the defect behind a second
+                    # identical error line.
+                    detail = f"{type(e).__name__}: {e}"
+                    transient = isinstance(e, db.TRANSIENT + (db.WriteLockTimeout,))
+                    if transient and h["id"] not in {x["hotel"]["id"] for x in deferred2}:
+                        deferred2.append(entry)
+                        work2.append(entry)     # picked up by this same loop, at the end
+                        print(f"{tag} deferred after {type(e).__name__} "
+                              f"(will retry at end of commit)")
+                    else:
+                        counts["hotels_error"] += 1
+                        revisit_row("error", detail)
+                        led.mark_unresolved(h, run_id, "error", detail)
+                        print(f"{tag} ERROR {type(e).__name__}: {e}")
+        except KeyboardInterrupt:
+            aborted_immediately = True
+            _STOP = True             # `global _STOP` already declared above
+            print("\n  aborted immediately during commit -- writing whatever "
+                  "results were already earned before exiting")
+        hotels_reached = i if work2 else hotels_planned
+    # `hotels_reached` and `hotels_planned` are both set by this point --
+    # the former by whichever of the two branches above ran, the latter right
+    # after Phase 1 -- and the report section below reuses the name `i` for
+    # its own, unrelated enumerate() loops over review_rows and
+    # unmatched_rows, so nothing past here may read `i` expecting a hotel
+    # index; that used to be exactly the kind of stale-variable bug that
+    # produces a confidently wrong number instead of an error.
 
     # -- report --------------------------------------------------------------
     # Sorts chronologically (run_id leads) AND reads at a glance months later:
@@ -3185,7 +3898,8 @@ def main(argv=None):
     # -STOPPED is visible in a plain `ls out/runs/`, not just inside
     # manifest.json's "stopped_early" field -- the whole point is telling a
     # partial run apart from a completed one without opening anything.
-    stop_label = ("-AGODA-DOWN" if agoda_dead else "-STOPPED" if _STOP else "")
+    stop_label = ("-AGODA-DOWN" if agoda_dead else "-STOPPED" if _STOP else
+                 "-PLAN-ONLY" if not proceed else "")
     folder = os.path.join(
         OUT, "runs", f"{run_id}-city{city_label}-{bound_label}{stop_label}")
     os.makedirs(folder, exist_ok=True)
@@ -3229,6 +3943,13 @@ def main(argv=None):
             # up only as slightly worse coverage months later.
             "booking_requested": bool(config.BOOKING_ENABLED and not a.no_booking),
             "booking_effective": bsess is not None,
+            # Two-phase transparency: a manifest from a plan-only or
+            # gate-declined invocation must not be mistaken for a completed
+            # run just because it has counts and a folder like one. `proceed`
+            # is the single source of truth for whether Phase 2 ran at all.
+            "plan_only_requested": a.plan_only,
+            "phase2_ran": proceed,
+            "hotels_planned": hotels_planned,
             "started_at": datetime.datetime.fromtimestamp(
                 started, datetime.timezone.utc).isoformat(timespec="seconds"),
             "duration_s": round(time.time() - started, 1),
@@ -3308,32 +4029,54 @@ def main(argv=None):
                  encoding="utf-8") as f:
             f.write("\n".join(summary_lines) + "\n")
 
-    # The Agoda property cache is mid-run scaffolding, not a deliverable -- it
-    # exists so a hotel already verified earlier in THIS run (or a run crashed
-    # and resumed) isn't re-fetched, never as a second source of truth to keep
-    # around. A run that reached the end of its hotel list is "done" in the
-    # sense that matters here, so its cache is swept. A run stopped early
-    # (Ctrl-C) is NOT done -- it is paused, and the whole point of the cache is
-    # to make resuming it cheap, so it is left alone.
-    if not (_STOP or agoda_dead):
+    # The Agoda property cache and the discovery plan are mid-run scaffolding,
+    # not a deliverable -- they exist so a hotel already verified earlier in
+    # THIS run (or a run crashed and resumed) isn't re-discovered, never as a
+    # second source of truth to keep around. A run that reached the end of its
+    # hotel list AND committed it is "done" in the sense that matters here, so
+    # the cache is swept -- MySQL and the ledger are now the record. Anything
+    # short of that (Ctrl-C, the Agoda breaker, the gate declined, or
+    # --plan-only) is NOT done -- it is paused, and the whole point of the
+    # cache is to make resuming it cheap without re-discovering anything, so it
+    # is left alone. `proceed` being False means Phase 2 never ran at all, in
+    # which case the plan is the ONLY record of this run's discovery -- wiping
+    # it would silently throw away exactly the work the operator just chose to
+    # hold onto for later.
+    if proceed and not (_STOP or agoda_dead):
         shutil.rmtree(CACHE, ignore_errors=True)
 
     status = ("STOPPED (agoda unreachable -- circuit breaker)" if agoda_dead else
               "STOPPED (aborted immediately)" if aborted_immediately else
               "STOPPED (finished the hotel in flight)" if _STOP else
+              "PLAN ONLY -- nothing committed" if not proceed else
               "finished")
+    cache_cleared = proceed and not (_STOP or agoda_dead)
     print(f"\nrun {run_id} {'(DRY RUN) ' if a.dry_run else ''}{status} in "
           f"{(time.time() - started) / 60:.1f} min"
-          + ("" if (_STOP or agoda_dead) else " -- cache cleared"))
-    # hotels_reached, not len(todo): a stopped-early run must be summarised
-    # against what it actually attempted, or the funnel below would show a
-    # phantom shortfall and flag itself as a false accounting bug.
-    _print_human_summary(counts, hotels_reached, destination, a.rooms_from)
+          + (" -- cache cleared" if cache_cleared else ""))
+    if proceed:
+        # hotels_reached, not len(todo): a stopped-early run must be
+        # summarised against what it actually attempted, or the funnel below
+        # would show a phantom shortfall and flag itself as a false
+        # accounting bug.
+        _print_human_summary(counts, hotels_reached, destination, a.rooms_from)
+    else:
+        # The gate already printed this exact summary once, moments ago, with
+        # hotels_mapped standing in for hotels_done because nothing had been
+        # committed yet. Reprinting it here with the REAL counts would show
+        # "0 published" right under a summary that just said otherwise --
+        # correct, since Phase 2 genuinely never ran, but reads as a
+        # regression rather than the deliberate stop it is.
+        print(f"\n{hotels_planned} hotel(s) discovered and check-pointed, "
+             f"0 committed (Phase 2 did not run).")
     print(f"\nFull machine-readable numbers: {os.path.join(folder, 'manifest.json')}")
     print(f"  report -> {folder}")
     if _STOP:
         print(f"  summary -> {os.path.join(folder, 'STOPPED_RUN_SUMMARY.txt')}")
         print(f"  to continue: python -m pipeline.run --city {destination}")
+    elif not proceed:
+        print(f"  to commit the check-pointed plan: "
+             f"python -m pipeline.run --city {destination}")
     conn.close()
     if lock is not None:
         lock.close()               # releases the flock; the OS also does this

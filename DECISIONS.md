@@ -792,6 +792,73 @@ missing one, so the gate holds. `searchresults.html` (same WAF token) returns
 needs the geo+name verification `match_hotel()` already implements.
 *Override if:* verified search resolution measures ≥80% on a 30-hotel sample.
 
+**D-46 — The pipeline is now TWO PHASES: discover everything, then commit
+everything. A gate sits between them.**
+Operator observation: watching the CLI during the old single-loop pipeline
+looked "stuck" for long stretches, because a hotel with a big gallery blocked
+the NEXT hotel's matching behind its own image downloads -- Agoda/Booking
+identity resolution is cheap network calls, mirroring is real image bytes, and
+interleaving them per-hotel meant the operator was watching image transfer
+disguised as a hang.
+
+**Phase 1 (discover):** `match_hotel` → `agoda_rooms` → `map_rooms` →
+`booking_fill`, for every hotel. No image downloaded, nothing written to
+MySQL — exactly what `--dry-run` already computed, just no longer entangled
+with Phase 2. Each hotel's result is check-pointed to `out/cache/plan.csv`
+the moment it's mapped (`_append_plan_rows`), fsynced, one hotel at a time —
+same durability discipline as `ledger.py`'s own appends. **Phase 2 (commit):**
+reads the plan back, re-fetches `existing_rooms()` FRESH (never trusts the
+Phase 1 snapshot — time may have passed, another run may have written), mirrors
+only what's still missing, publishes. `db.publish()`, `cos.mirror()`,
+`ledger.py` and the hotel write lock are **unchanged** — only what feeds them
+moved earlier.
+
+**The gate:** the moment Phase 1 ends, the exact `_print_human_summary()` this
+pipeline already prints at the end of a run is printed again, right there —
+free, since every number it reads (`rooms_with_candidate_images`, etc.) is
+already fully populated by Phase 1 and Phase 2 never touches those counters.
+A dry run always proceeds (Phase 2 writes nothing in that mode); `--plan-only`
+always stops; otherwise `--yes` or a non-interactive stdin proceeds
+automatically (an unattended cron job must never block on `input()`); an
+attached terminal is asked `[y/N]`.
+
+**ACID audit, before implementing, not after:** `db.publish()` reads only
+`hotel["id"]` — a plan-reconstructed hotel dict is already sufficient, proven
+because `apply_review_decisions()` (existing, shipped) already calls it that
+exact way. `cos.mirror()` is explicitly documented as orphan-safe under a
+crash: "the next run computes the same key and reuses it" (content
+addressing). One real gap WAS found and deliberately not inherited:
+`apply_review_decisions()` mirrors unconditionally on every call, so resuming
+it re-downloads images for already-committed rooms (safe, wasteful). Phase 2
+instead reuses `_split_for_mirroring()` + a fresh `existing_rooms()` read, so a
+resumed commit never re-touches a room already in MySQL.
+
+**Resumability, live-verified, not just reasoned about:** `--plan-only` run →
+checkpoint written, folder tagged `-PLAN-ONLY`. Re-invoking the SAME command
+without any flag printed `plan checkpoint: 3 hotel(s) already discovered,
+resuming` and skipped Phase 1's per-hotel loop entirely, landing straight on
+the gate. A torn last row (crash mid-write) is dropped by an explicit width
+check, not silently accepted with `None`-filled fields — `csv.DictReader`
+does NOT do this on its own; verified by writing one by hand and reloading.
+Selftest (`_selftest_plan_checkpoint`) additionally proves: image/size/category
+round-trip correctly, `image_source` provenance survives (a Booking-sourced
+room must not read back as `"agoda"`, which is `_room()`'s own default for any
+non-empty image list), and the plan scope is invalidated by BOTH a different
+hotel set and a changed matching config (`BOOKING_MIN_NAME` etc.) — reusing
+rooms matched under stale tuning would silently publish a decision the current
+config disagrees with.
+
+Category is deliberately **re-derived at commit time**, never trusted off the
+CSV: `_room_from_plan_row` calls `_room()` on the room's plain name against
+`cat_ids` as resolved in the Phase 2 invocation, exactly like
+`_room_from_review_row` already does. If `cat_ids` changed between discovery
+and commit (a category renamed, `categories.classify()` updated), the commit
+reflects the current rules, not stale ones baked into the plan file.
+
+*Override if:* never, without re-measuring — this closes a real, reported
+"looks broken but isn't" observability gap and the audit specifically found
+and closed the one wasteful-resume gap the closest existing precedent had.
+
 ## Open / unsettled
 
 - **O-1 — Is `/hotels/api/availability` a supported contract?** Undocumented,

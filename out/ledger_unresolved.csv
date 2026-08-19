@@ -87,3 +87,31 @@ row_id,v2_common_hotel_id,city_id,slug,name,run_id,reason,detail,last_attempted_
 86,412,9658,palm-beach-hotel,palm beach hotel,20260818-222232,no_agoda_match,rejected 'Jomtien Palm Beach Hotel & Resort - Family-Friendly' name=100% strict=48% dist=4957.17km same_city=False,2026-08-18T22:29:06
 87,414,9658,imperial-suites-hotel,imperial suites hotel,20260818-222232,no_agoda_match,rejected 'HOTEL IMPERIAL SUITES' name=100% strict=100% dist=1930.31km same_city=False,2026-08-18T22:29:34
 88,417,9658,rush-inn-hotel,rush inn hotel,20260818-222232,no_rooms_any_date,"agoda source=http, bookme rooms=0",2026-08-18T22:31:08
+89,404,9658,al-waleed-palace-hotel-apartments-oud-metha,al waleed palace hotel apartments oud metha,20260819-124133,no_agoda_match,rejected 'Dunes Hotel Apartment Oud Metha' name=73% strict=70% dist=0.86km same_city=True,2026-08-19T12:43:07
+90,404,9658,al-waleed-palace-hotel-apartments-oud-metha,al waleed palace hotel apartments oud metha,20260819-124352,no_agoda_match,rejected 'Dunes Hotel Apartment Oud Metha' name=73% strict=70% dist=0.86km same_city=True,2026-08-19T12:46:02
+91,403,9658,nihal-residency-hotel-apartments,nihal residency hotel apartments,20260819-124654,error,BrokenPipeError: [Errno 32] Broken pipe,2026-08-19T12:47:04
+92,404,9658,al-waleed-palace-hotel-apartments-oud-metha,al waleed palace hotel apartments oud metha,20260819-130619,no_agoda_match,rejected 'Dunes Hotel Apartment Oud Metha' name=73% strict=70% dist=0.86km same_city=True,2026-08-19T13:07:46
+93,403,9658,nihal-residency-hotel-apartments,nihal residency hotel apartments,20260819-130619,resolved,,2026-08-19T13:08:17
+94,404,9658,al-waleed-palace-hotel-apartments-oud-metha,al waleed palace hotel apartments oud metha,20260819-130619,resolved,,2026-08-19T13:08:18
+95,404,9658,al-waleed-palace-hotel-apartments-oud-metha,al waleed palace hotel apartments oud metha,20260819-130619,needs_image_backfill,4 room(s) published without a thumbnail this run,2026-08-19T13:08:18
+96,404,9658,al-waleed-palace-hotel-apartments-oud-metha,al waleed palace hotel apartments oud metha,20260819-143429,no_agoda_match,rejected 'Dunes Hotel Apartment Oud Metha' name=73% strict=70% dist=0.86km same_city=True,2026-08-19T14:36:20
+97,407,9658,time-palace-hotel,time palace hotel,20260819-143429,no_rooms_any_date,"agoda source=http, bookme rooms=0",2026-08-19T14:38:41
+98,410,9658,panorama-bur-dubai-hotel,panorama bur dubai hotel,20260819-143429,no_rooms_any_date,"agoda source=http, bookme rooms=0",2026-08-19T14:41:30
+99,404,9658,al-waleed-palace-hotel-apartments-oud-metha,al waleed palace hotel apartments oud metha,20260819-143429,resolved,,2026-08-19T14:41:35
+100,404,9658,al-waleed-palace-hotel-apartments-oud-metha,al waleed palace hotel apartments oud metha,20260819-143429,needs_image_backfill,4 room(s) published without a thumbnail this run,2026-08-19T14:41:35
+101,406,9658,ambassador-hotel,ambassador hotel,20260819-143429,needs_image_backfill,2 room(s) published without a thumbnail this run,2026-08-19T14:46:07
+102,404,9658,al-waleed-palace-hotel-apartments-oud-metha,al waleed palace hotel apartments oud metha,20260819-145701,no_agoda_match,rejected 'Dunes Hotel Apartment Oud Metha' name=73% strict=70% dist=0.86km same_city=True,2026-08-19T14:59:16
+103,412,9658,palm-beach-hotel,palm beach hotel,20260819-145701,no_agoda_match,rejected 'Jomtien Palm Beach Hotel & Resort - Family-Friendly' name=100% strict=48% dist=4957.17km same_city=False,2026-08-19T15:01:55
+104,406,9658,ambassador-hotel,ambassador hotel,20260819-145701,resolved,,2026-08-19T15:02:02
+105,406,9658,ambassador-hotel,ambassador hotel,20260819-145701,needs_image_backfill,1 room(s) published without a thumbnail this run,2026-08-19T15:02:02
+106,407,9658,time-palace-hotel,time palace hotel,20260819-145701,resolved,,2026-08-19T15:03:08
+107,404,9658,al-waleed-palace-hotel-apartments-oud-metha,al waleed palace hotel apartments oud metha,20260819-150311,no_agoda_match,rejected 'Dunes Hotel Apartment Oud Metha' name=73% strict=70% dist=0.86km same_city=True,2026-08-19T15:04:19
+108,412,9658,palm-beach-hotel,palm beach hotel,20260819-150311,no_agoda_match,rejected 'Jomtien Palm Beach Hotel & Resort - Family-Friendly' name=100% strict=48% dist=4957.17km same_city=False,2026-08-19T15:04:56
+109,406,9658,ambassador-hotel,ambassador hotel,20260819-150311,resolved,,2026-08-19T15:05:37
+110,406,9658,ambassador-hotel,ambassador hotel,20260819-150311,needs_image_backfill,1 room(s) published without a thumbnail this run,2026-08-19T15:05:37
+111,410,9658,panorama-bur-dubai-hotel,panorama bur dubai hotel,20260819-150311,resolved,,2026-08-19T15:05:45
+112,412,9658,palm-beach-hotel,palm beach hotel,20260819-150311,resolved,,2026-08-19T15:10:29
+113,412,9658,palm-beach-hotel,palm beach hotel,20260819-150311,needs_image_backfill,2 room(s) published without a thumbnail this run,2026-08-19T15:10:29
+114,404,9658,al-waleed-palace-hotel-apartments-oud-metha,al waleed palace hotel apartments oud metha,20260819-150311,resolved,,2026-08-19T15:10:31
+115,404,9658,al-waleed-palace-hotel-apartments-oud-metha,al waleed palace hotel apartments oud metha,20260819-150311,needs_image_backfill,3 room(s) published without a thumbnail this run,2026-08-19T15:10:31
+116,606,1280,hilton-dubai-jumeirah,hilton dubai jumeirah,20260819-163144,error,BrokenPipeError: [Errno 32] Broken pipe,2026-08-19T16:33:22
