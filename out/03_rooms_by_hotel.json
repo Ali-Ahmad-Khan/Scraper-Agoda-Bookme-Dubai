@@ -1,0 +1,1738 @@
+{
+  "check_in": "2026-08-15",
+  "check_out": "2026-08-16",
+  "run_complete": true,
+  "hotel_count": 6,
+  "hotels_with_rooms_on_both": 5,
+  "stats": {
+    "agoda_no_rooms": 1,
+    "bookme_no_rooms": 0,
+    "agoda_blind_over_http": 6,
+    "agoda_recovered_by_browser": 5,
+    "hotels_escalated": 5,
+    "escalation_gained_rooms": 0,
+    "confirmed_no_supplier": 0
+  },
+  "hotels": [
+    {
+      "bookme_id": 451767,
+      "agoda_id": 71069,
+      "slug": "arabian-park-dubai-an-edge-by-rotana-hotel-94",
+      "destination": "Dubai",
+      "hotel_name_bookme": "Arabian Park Dubai, an Edge by Rotana Hotel",
+      "hotel_name_agoda": "Arabian Park Dubai, an Edge by Rotana Hotel",
+      "address_bookme": "Al Jadaf Street, Behind Latifa Hospital - Al Jadaf - الجداف - دبي, , Dubai, P.O. Box 122382, United Arab Emirates",
+      "address_agoda": "Al Jadaf Street, behind Latifa Hospital, Al Jadaf, Dubai, United Arab Emirates, Al Jaddaf, Dubai, United Arab Emirates, 122382",
+      "agoda_url": "https://www.agoda.com/search?hotel=71069",
+      "match_confidence": "high",
+      "bookme_rate_plan_count": 34,
+      "agoda_source": "browser",
+      "rooms_bookme": [
+        {
+          "room_name": "Twin/Double Room City View",
+          "max_occupancy": 2,
+          "accurate_media": false
+        },
+        {
+          "room_name": "City View Twin Room",
+          "max_occupancy": 2,
+          "accurate_media": false
+        },
+        {
+          "room_name": "Pool View",
+          "max_occupancy": 2,
+          "accurate_media": false
+        },
+        {
+          "room_name": "Pool View Twin Room",
+          "max_occupancy": 2,
+          "accurate_media": false
+        },
+        {
+          "room_name": "Room 2 Twin Beds City View",
+          "max_occupancy": 2,
+          "accurate_media": false
+        },
+        {
+          "room_name": "Room 1 King Bed City View",
+          "max_occupancy": 2,
+          "accurate_media": false
+        },
+        {
+          "room_name": "Room 2 Twin Beds Pool View",
+          "max_occupancy": 2,
+          "accurate_media": false
+        },
+        {
+          "room_name": "Guest Room",
+          "max_occupancy": 2,
+          "accurate_media": false
+        },
+        {
+          "room_name": "Room 1 King Bed Pool View",
+          "max_occupancy": 2,
+          "accurate_media": false
+        },
+        {
+          "room_name": "City View Room King Bed",
+          "max_occupancy": 2,
+          "accurate_media": false
+        },
+        {
+          "room_name": "Guest Room With Balcony",
+          "max_occupancy": 2,
+          "accurate_media": false
+        },
+        {
+          "room_name": "Pool View Room King Bed",
+          "max_occupancy": 2,
+          "accurate_media": false
+        },
+        {
+          "room_name": "Room 1 King Bed Balcony (Guest)",
+          "max_occupancy": 2,
+          "accurate_media": false
+        },
+        {
+          "room_name": "Spacious Room With King Bed",
+          "max_occupancy": 2,
+          "accurate_media": false
+        },
+        {
+          "room_name": "Spacious Guest Room With 2 Single Beds",
+          "max_occupancy": 2,
+          "accurate_media": false
+        },
+        {
+          "room_name": "Family Room Multiple Beds Connecting Rooms",
+          "max_occupancy": 2,
+          "accurate_media": false
+        },
+        {
+          "room_name": "Room 2 Twin Beds Balcony (Spacious)",
+          "max_occupancy": 2,
+          "accurate_media": false
+        },
+        {
+          "room_name": "Double Room King Bed City View",
+          "max_occupancy": 2,
+          "accurate_media": false
+        },
+        {
+          "room_name": "Family Room Connecting",
+          "max_occupancy": 2,
+          "accurate_media": false
+        },
+        {
+          "room_name": "Double Room King Bed Pool View",
+          "max_occupancy": 2,
+          "accurate_media": false
+        }
+      ],
+      "rooms_agoda": [
+        {
+          "agoda_room_id": 580506806,
+          "room_name": "City View Twin Room",
+          "max_occupancy": 2,
+          "beds": "2 beds",
+          "rate_plan_count": 12,
+          "images": [
+            "https://q-xx.bstatic.com/xdata/images/hotel/max1024x768/397874591.jpg?k=7c8b54ab4d3215ec2a558fe166e3d7309156f1b3db6e728d91e8f3ebf7f86d35&o=",
+            "https://q-xx.bstatic.com/xdata/images/hotel/max1024x768/397875474.jpg?k=49f6df1110eed58b6b04f6bd786f4611dc1366e8113170e85780162f9f8ed7d1&o=",
+            "https://pix8.agoda.net/hotelImages/4880216/1332568445/46cf42cf4191e999c671db093d2369f1.jpeg?ce=3&s=1024x768",
+            "https://q-xx.bstatic.com/xdata/images/hotel/max1024x768/397874653.jpg?k=2d12786a6fe02f372cdaa0eadb053e9608e735af4510222e10e6b24ae760bbb4&o=",
+            "https://pix8.agoda.net/hotelImages/71069/-1/bbc544694ad0aedbf80a15d085d2e770.jpg?ce=0&s=1024x768",
+            "https://pix8.agoda.net/hotelImages/4880216/1332568445/e75ad33f1725b6a42cd522fb7e45fe81.jpeg?ce=3&s=1024x768",
+            "https://q-xx.bstatic.com/xdata/images/hotel/max1024x768/397875544.jpg?k=644b67117e424fc5c7ea07bf7c8c885c32bb2f66772aa9869711d1da53339601&o="
+          ],
+          "image_captions": [
+            "",
+            "",
+            "Guestroom",
+            "",
+            "Bed",
+            "Guestroom",
+            ""
+          ],
+          "thumbnail": "https://q-xx.bstatic.com/xdata/images/hotel/max300/397874591.jpg?k=7c8b54ab4d3215ec2a558fe166e3d7309156f1b3db6e728d91e8f3ebf7f86d35&o="
+        },
+        {
+          "agoda_room_id": 355824375,
+          "room_name": "City View Room - Twin Beds",
+          "max_occupancy": 2,
+          "beds": "2 beds",
+          "rate_plan_count": 8,
+          "images": [
+            "https://q-xx.bstatic.com/xdata/images/hotel/max1024x768/397873495.jpg?k=aa1d62a92c2a8a1693c7fe344d5b634bedc17b82b39c22affdddeabc2241262e&o=",
+            "https://q-xx.bstatic.com/xdata/images/hotel/max1024x768/397873572.jpg?k=21ee8b1e194c019cb5cda1ed178f5a3da30243c4787463fbd5039c343ff2bb74&o=",
+            "https://q-xx.bstatic.com/xdata/images/hotel/max1024x768/397873381.jpg?k=c52539628b04552f6e137420b63e84d00eea0d988b1d6d7c3a0859b6811190d2&o=",
+            "https://q-xx.bstatic.com/xdata/images/hotel/max1024x768/397873537.jpg?k=d9c96f99d1b18d06a8e34728e53c118968b4b085b40d76f8905c0d22dbffd57e&o="
+          ],
+          "image_captions": [
+            "",
+            "",
+            "",
+            ""
+          ],
+          "thumbnail": "https://q-xx.bstatic.com/xdata/images/hotel/max300/397873495.jpg?k=aa1d62a92c2a8a1693c7fe344d5b634bedc17b82b39c22affdddeabc2241262e&o="
+        },
+        {
+          "agoda_room_id": 355824373,
+          "room_name": "City View Room - King Bed",
+          "max_occupancy": 2,
+          "beds": "1 bed",
+          "rate_plan_count": 8,
+          "images": [
+            "https://q-xx.bstatic.com/xdata/images/hotel/max1024x768/397865476.jpg?k=74ea1bb344c49a9ee11520d3a6c90cac5d715e21cd7da4b981669d87b2c552bb&o=",
+            "https://q-xx.bstatic.com/xdata/images/hotel/max1024x768/397865460.jpg?k=87e397b21480a4d6b2c9baabca76b88db4fb47f5f221d4723581529de7a984b6&o=",
+            "https://q-xx.bstatic.com/xdata/images/hotel/max1024x768/397873381.jpg?k=c52539628b04552f6e137420b63e84d00eea0d988b1d6d7c3a0859b6811190d2&o=",
+            "https://q-xx.bstatic.com/xdata/images/hotel/max1024x768/397871291.jpg?k=1c63a647b8ff5a671cfec867ab52883c293fb97fd0b833e540fc07918976f1e5&o="
+          ],
+          "image_captions": [
+            "",
+            "",
+            "",
+            ""
+          ],
+          "thumbnail": "https://q-xx.bstatic.com/xdata/images/hotel/max300/397865476.jpg?k=74ea1bb344c49a9ee11520d3a6c90cac5d715e21cd7da4b981669d87b2c552bb&o="
+        },
+        {
+          "agoda_room_id": 580506119,
+          "room_name": "City View Room - King Bed",
+          "max_occupancy": 2,
+          "beds": "1 bed",
+          "rate_plan_count": 3,
+          "images": [
+            "https://pix8.agoda.net/hotelImages/4880216/1332568446/cc43b19c2a9357598daeb6753f6c1b60.jpeg?ce=3&s=1024x768",
+            "https://pix8.agoda.net/hotelImages/71069/-1/fc316266d0ef7282919fbde02c3691e2.jpg?ce=0&s=1024x768",
+            "https://pix8.agoda.net/hotelImages/4880216/1332568446/46cf42cf4191e999c671db093d2369f1.jpeg?ce=3&s=1024x768"
+          ],
+          "image_captions": [
+            "Guestroom",
+            "Room plan",
+            "Guestroom"
+          ],
+          "thumbnail": "https://pix8.agoda.net/hotelImages/4880216/1332568446/cc43b19c2a9357598daeb6753f6c1b60.jpeg?ce=3&s=208x117&ar=16x9"
+        },
+        {
+          "agoda_room_id": 355824376,
+          "room_name": "Pool View Room - Twin Beds",
+          "max_occupancy": 2,
+          "beds": "2 beds",
+          "rate_plan_count": 8,
+          "images": [
+            "https://q-xx.bstatic.com/xdata/images/hotel/max1024x768/397873495.jpg?k=aa1d62a92c2a8a1693c7fe344d5b634bedc17b82b39c22affdddeabc2241262e&o=",
+            "https://q-xx.bstatic.com/xdata/images/hotel/max1024x768/397873572.jpg?k=21ee8b1e194c019cb5cda1ed178f5a3da30243c4787463fbd5039c343ff2bb74&o=",
+            "https://q-xx.bstatic.com/xdata/images/hotel/max1024x768/397873381.jpg?k=c52539628b04552f6e137420b63e84d00eea0d988b1d6d7c3a0859b6811190d2&o=",
+            "https://q-xx.bstatic.com/xdata/images/hotel/max1024x768/397873537.jpg?k=d9c96f99d1b18d06a8e34728e53c118968b4b085b40d76f8905c0d22dbffd57e&o="
+          ],
+          "image_captions": [
+            "",
+            "",
+            "",
+            ""
+          ],
+          "thumbnail": "https://q-xx.bstatic.com/xdata/images/hotel/max300/397873495.jpg?k=aa1d62a92c2a8a1693c7fe344d5b634bedc17b82b39c22affdddeabc2241262e&o="
+        },
+        {
+          "agoda_room_id": 580507147,
+          "room_name": "Pool View Twin Room",
+          "max_occupancy": 2,
+          "beds": "2 beds",
+          "rate_plan_count": 3,
+          "images": [
+            "https://pix8.agoda.net/hotelImages/4880216/1332568452/e75ad33f1725b6a42cd522fb7e45fe81.jpeg?ce=3&s=1024x768",
+            "https://pix8.agoda.net/hotelImages/71069/-1/8d8a5b521b6418ff2b19f2a6708ba925.jpg?ce=0&s=1024x768",
+            "https://pix8.agoda.net/hotelImages/71069/-1/747444eeeb01bdd85329ae49631986a4.jpg?ce=0&s=1024x768"
+          ],
+          "image_captions": [
+            "Guestroom",
+            "Bed",
+            "Bathroom"
+          ],
+          "thumbnail": "https://pix8.agoda.net/hotelImages/4880216/1332568452/e75ad33f1725b6a42cd522fb7e45fe81.jpeg?ce=3&s=208x117&ar=16x9"
+        },
+        {
+          "agoda_room_id": 580506568,
+          "room_name": "Pool View Room - King Bed",
+          "max_occupancy": 2,
+          "beds": "1 bed",
+          "rate_plan_count": 3,
+          "images": [
+            "https://pix8.agoda.net/hotelImages/71069/-1/53fa234ca416382b9e3c22a8500ce604.jpg?ce=0&s=1024x768",
+            "https://pix8.agoda.net/hotelImages/4880216/1332568450/46cf42cf4191e999c671db093d2369f1.jpeg?ce=3&s=1024x768"
+          ],
+          "image_captions": [
+            "Bed",
+            "Guestroom"
+          ],
+          "thumbnail": "https://pix8.agoda.net/hotelImages/71069/-1/53fa234ca416382b9e3c22a8500ce604.jpg?ce=0&s=208x117&ar=16x9"
+        },
+        {
+          "agoda_room_id": 355824374,
+          "room_name": "Pool View Room - King Bed",
+          "max_occupancy": 2,
+          "beds": "1 bed",
+          "rate_plan_count": 8,
+          "images": [
+            "https://q-xx.bstatic.com/xdata/images/hotel/max1024x768/397865476.jpg?k=74ea1bb344c49a9ee11520d3a6c90cac5d715e21cd7da4b981669d87b2c552bb&o=",
+            "https://q-xx.bstatic.com/xdata/images/hotel/max1024x768/397865460.jpg?k=87e397b21480a4d6b2c9baabca76b88db4fb47f5f221d4723581529de7a984b6&o=",
+            "https://q-xx.bstatic.com/xdata/images/hotel/max1024x768/397873381.jpg?k=c52539628b04552f6e137420b63e84d00eea0d988b1d6d7c3a0859b6811190d2&o=",
+            "https://q-xx.bstatic.com/xdata/images/hotel/max1024x768/397871291.jpg?k=1c63a647b8ff5a671cfec867ab52883c293fb97fd0b833e540fc07918976f1e5&o="
+          ],
+          "image_captions": [
+            "",
+            "",
+            "",
+            ""
+          ],
+          "thumbnail": "https://q-xx.bstatic.com/xdata/images/hotel/max300/397865476.jpg?k=74ea1bb344c49a9ee11520d3a6c90cac5d715e21cd7da4b981669d87b2c552bb&o="
+        },
+        {
+          "agoda_room_id": 580507278,
+          "room_name": "Guest Room with Balcony",
+          "max_occupancy": 3,
+          "beds": "1 bed",
+          "rate_plan_count": 6,
+          "images": [
+            "https://pix8.agoda.net/hotelImages/71069/-1/45aa43913b7c7ecd04b4bc807776037e.jpg?ce=0&s=1024x768",
+            "https://pix8.agoda.net/hotelImages/4880216/1332568442/2e3a54b7d81e5e949a2613345783c343.jpeg?ce=3&s=1024x768",
+            "https://pix8.agoda.net/hotelImages/4880216/1332568442/8551afc4a090d7c0fd0cd3818646261c.jpeg?ce=3&s=1024x768",
+            "https://pix8.agoda.net/hotelImages/4880216/1332568442/b09db53a6a4bd6b76e1204a3d7c47eab.jpeg?ce=3&s=1024x768",
+            "https://pix8.agoda.net/hotelImages/71069/-1/690557906075947364c79acc2f3282b0.jpg?ce=0&s=1024x768"
+          ],
+          "image_captions": [
+            "Room plan",
+            "Guestroom",
+            "Guestroom",
+            "Guestroom",
+            "Bed"
+          ],
+          "thumbnail": "https://pix8.agoda.net/hotelImages/71069/-1/45aa43913b7c7ecd04b4bc807776037e.jpg?ce=0&s=208x117&ar=16x9"
+        },
+        {
+          "agoda_room_id": 586234716,
+          "room_name": "Guest Room with Balcony - King Bed",
+          "max_occupancy": 3,
+          "beds": "1 bed",
+          "rate_plan_count": 10,
+          "images": [
+            "https://q-xx.bstatic.com/xdata/images/hotel/max1024x768/397874173.jpg?k=4e06462fb03d98daf82b94e1a49ecf4d8a09fd49409eacc804f84e86c9db6943&o=",
+            "https://q-xx.bstatic.com/xdata/images/hotel/max1024x768/397874357.jpg?k=6510e8307c352326a06130de1a1143105cce6fcbabb9aae10b9f5cff96397c41&o=",
+            "https://q-xx.bstatic.com/xdata/images/hotel/max1024x768/397874366.jpg?k=a78f964ecddc3bacb476018e601063b28436f1573c52acc0e2873a2d1627f4ac&o=",
+            "https://q-xx.bstatic.com/xdata/images/hotel/max1024x768/397874267.jpg?k=4683d560827a7d95c524f458f9183baa23a1753c6fe130d3a72c4f76e9090860&o=",
+            "https://q-xx.bstatic.com/xdata/images/hotel/max1024x768/397874347.jpg?k=784a5533ee9fba50f067aefbb65b4f9c4b949ae46424cb4a96e1dd865eef1d98&o="
+          ],
+          "image_captions": [
+            "",
+            "",
+            "",
+            "",
+            ""
+          ],
+          "thumbnail": "https://q-xx.bstatic.com/xdata/images/hotel/max300/397874173.jpg?k=4e06462fb03d98daf82b94e1a49ecf4d8a09fd49409eacc804f84e86c9db6943&o="
+        },
+        {
+          "agoda_room_id": 580508537,
+          "room_name": "Spacious Guest Room with 2 Single Beds",
+          "max_occupancy": 3,
+          "beds": "2 beds",
+          "rate_plan_count": 6,
+          "images": [
+            "https://pix8.agoda.net/hotelImages/71069/-1/5c10fcd794d9e3dd9a18cbf4d555a13e.jpg?ce=0&s=1024x768",
+            "https://pix8.agoda.net/hotelImages/71069/-1/e11e9a7e3b36e7a96db5456ffc7936ab.jpg?ce=0&s=1024x768",
+            "https://pix8.agoda.net/hotelImages/71069/-1/99023806c9c3362c37b70113accc3cb9.jpg?ce=0&s=1024x768"
+          ],
+          "image_captions": [
+            "View",
+            "Bed",
+            "Bathroom"
+          ],
+          "thumbnail": "https://pix8.agoda.net/hotelImages/71069/-1/5c10fcd794d9e3dd9a18cbf4d555a13e.jpg?ce=0&s=208x117&ar=16x9"
+        },
+        {
+          "agoda_room_id": 580508207,
+          "room_name": "Spacious Room with King Bed",
+          "max_occupancy": 3,
+          "beds": "1 bed",
+          "rate_plan_count": 6,
+          "images": [
+            "https://pix8.agoda.net/hotelImages/71069/-1/9dc43479f015f5b4b83643843aee9a60.jpg?ce=0&s=1024x768",
+            "https://pix8.agoda.net/hotelImages/71069/-1/c47e6b70ddb61633a526f9dedf567da6.jpg?ce=0&s=1024x768",
+            "https://pix8.agoda.net/hotelImages/4880216/1332568454/67713ba83e77d1455a6e77415a9fbb89.jpeg?ce=3&s=1024x768"
+          ],
+          "image_captions": [
+            "View",
+            "Bed",
+            "Guestroom"
+          ],
+          "thumbnail": "https://pix8.agoda.net/hotelImages/71069/-1/9dc43479f015f5b4b83643843aee9a60.jpg?ce=0&s=208x117&ar=16x9"
+        },
+        {
+          "agoda_room_id": 586234718,
+          "room_name": "Spacious Room with Balcony - King Bed",
+          "max_occupancy": 3,
+          "beds": "1 bed",
+          "rate_plan_count": 10,
+          "images": [
+            "https://q-xx.bstatic.com/xdata/images/hotel/max1024x768/397874483.jpg?k=ffbfbf884146d1362ad106fdcaee58b3154d986f8ba12cc1b2c398719a5bcb21&o=",
+            "https://q-xx.bstatic.com/xdata/images/hotel/max1024x768/397874404.jpg?k=5b7194833e896390a4c0fb83bf740294b9bcf68e1718c8e58d3691bd34cf8909&o=",
+            "https://q-xx.bstatic.com/xdata/images/hotel/max1024x768/397873381.jpg?k=c52539628b04552f6e137420b63e84d00eea0d988b1d6d7c3a0859b6811190d2&o=",
+            "https://q-xx.bstatic.com/xdata/images/hotel/max1024x768/397874510.jpg?k=81f6593e5a542eca4428fa5a9e68df4cdc69fed67bc16d88ad4ebc6de07f03bf&o=",
+            "https://q-xx.bstatic.com/xdata/images/hotel/max1024x768/397874543.jpg?k=4d3cc60be7cf7fd2fb45792cb878af2d1ce4a0709db74c8f5b6774765f8555be&o="
+          ],
+          "image_captions": [
+            "",
+            "",
+            "",
+            "",
+            ""
+          ],
+          "thumbnail": "https://q-xx.bstatic.com/xdata/images/hotel/max300/397874483.jpg?k=ffbfbf884146d1362ad106fdcaee58b3154d986f8ba12cc1b2c398719a5bcb21&o="
+        }
+      ]
+    },
+    {
+      "bookme_id": 452485,
+      "agoda_id": 1618810,
+      "slug": "rove-healthcare-city-bur-dubai",
+      "destination": "Dubai",
+      "hotel_name_bookme": "Rove Healthcare City - Bur Dubai",
+      "hotel_name_agoda": "Rove Bur Dubai - Healthcare City",
+      "address_bookme": "19th Street - طريق عود ميثاء - عود ميثاء - دبي, , Dubai, 119444, United Arab Emirates",
+      "address_agoda": "19th Street Oud Metha Bur Dubai, Bur Dubai, Dubai, United Arab Emirates, 119444",
+      "agoda_url": "https://www.agoda.com/search?hotel=1618810",
+      "match_confidence": "high",
+      "bookme_rate_plan_count": 28,
+      "agoda_source": "escalation",
+      "rooms_bookme": [
+        {
+          "room_name": "Double Or Twin Double Or Twin Standard",
+          "max_occupancy": 2,
+          "accurate_media": false
+        },
+        {
+          "room_name": "Rove Room",
+          "max_occupancy": 2,
+          "accurate_media": false
+        },
+        {
+          "room_name": "Rover Room",
+          "max_occupancy": 2,
+          "accurate_media": false
+        },
+        {
+          "room_name": "Rover Room Easy Access To Sheikh Zayed Road Andamp; Bur Dubai (1 King Bed And 1 Twin Sofa Bed) Package Rate",
+          "max_occupancy": 2,
+          "accurate_media": false
+        },
+        {
+          "room_name": "Rover Plus Room Easy Access To Sheikh Zayed Road Andamp; Bur Dubai (1 King Bed And 1 Twin Sofa Bed) Package Rate",
+          "max_occupancy": 2,
+          "accurate_media": false
+        },
+        {
+          "room_name": "Rover City View Room.",
+          "max_occupancy": 2,
+          "accurate_media": false
+        },
+        {
+          "room_name": "Rover Plus Room Easy Access To Sheikh Zayed Road And Bur Dubai",
+          "max_occupancy": 2,
+          "accurate_media": false
+        },
+        {
+          "room_name": "Rover Plus Room Unlimited Tea And Coffee, 20% Off On Fandb And Laundry And More",
+          "max_occupancy": 2,
+          "accurate_media": false
+        },
+        {
+          "room_name": "Rover Room Dbl",
+          "max_occupancy": 2,
+          "accurate_media": false
+        },
+        {
+          "room_name": "Single Room",
+          "max_occupancy": 1,
+          "accurate_media": false
+        },
+        {
+          "room_name": "Single Single Standard",
+          "max_occupancy": 1,
+          "accurate_media": false
+        }
+      ],
+      "rooms_agoda": [
+        {
+          "agoda_room_id": 10132107,
+          "room_name": "Rover Room",
+          "max_occupancy": 2,
+          "beds": "2 beds",
+          "rate_plan_count": 3,
+          "images": [
+            "https://pix8.agoda.net/hotelImages/1618810/10132107/673c3b0dc1cc3934ef94570b1289d75f.jpg?ce=2&s=1024x768",
+            "https://q-xx.bstatic.com/xdata/images/hotel/max1024x768/836333614.jpg?k=1081e8471fbecc2a77ea9cd627fd12c125a465bd976d361be92980d3793c6395&o=",
+            "https://q-xx.bstatic.com/xdata/images/hotel/max1024x768/836333619.jpg?k=65fc398bf9ec19dd3197222c227a04d151b295597bc8af3f882d9f7c63cd6fc2&o=",
+            "https://pix8.agoda.net/property/1618810/872921121/4bb0f01dafad6ca33d0f7918bf99d69f.jpeg?ce=0&s=1024x768",
+            "https://pix8.agoda.net/property/1618810/872921121/0da382b114f1125f46885a86cf971600.jpeg?ce=0&s=1024x768",
+            "https://pix8.agoda.net/hotelImages/161/1618810/1618810_17030515020051375184.jpg?ca=13&ce=1&s=1024x768",
+            "https://pix8.agoda.net/property/1618810/781270308/d1cab3267329f162ebab7c332ce7fbb0.jpeg?ce=0&s=1024x768",
+            "https://pix8.agoda.net/property/1618810/0/8f23a031c7e538c25d58c11c15196fcf.jpeg?ce=0&s=1024x768",
+            "https://q-xx.bstatic.com/xdata/images/hotel/max1024x768/882993908.jpg?k=504b79d6f0a320665abb57d75ad371a570ecb2d6b15617c43d435dad787ec417&o=",
+            "https://pix8.agoda.net/property/4944928/756247922/4acd771ff965bde105f32af3c0957485.jpeg?ce=3&s=1024x768"
+          ],
+          "image_captions": [
+            "Bedroom",
+            "",
+            "",
+            "",
+            "",
+            "View",
+            "",
+            "",
+            "",
+            "Guestroom"
+          ],
+          "thumbnail": "https://pix8.agoda.net/hotelImages/1618810/10132107/673c3b0dc1cc3934ef94570b1289d75f.jpg?ce=2&s=208x117&ar=16x9"
+        }
+      ]
+    },
+    {
+      "bookme_id": 452376,
+      "agoda_id": 1157585,
+      "slug": "ibis-one-central-390",
+      "destination": "Dubai",
+      "hotel_name_bookme": "ibis One Central",
+      "hotel_name_agoda": "ibis Dubai One Central",
+      "address_bookme": "Trade Centre - District, , Dubai, 9622, United Arab Emirates",
+      "address_agoda": "TRADE CENTRE DISTRICT, World Trade Centre DIFC, Dubai, United Arab Emirates, 9914",
+      "agoda_url": "https://www.agoda.com/search?hotel=1157585",
+      "match_confidence": "high",
+      "bookme_rate_plan_count": 103,
+      "agoda_source": "escalation",
+      "rooms_bookme": [
+        {
+          "room_name": "Twin Room",
+          "max_occupancy": 2,
+          "accurate_media": false
+        },
+        {
+          "room_name": "Double Room Queen Bed",
+          "max_occupancy": 2,
+          "accurate_media": false
+        },
+        {
+          "room_name": "Double Room Queen Bed Premium",
+          "max_occupancy": 2,
+          "accurate_media": false
+        },
+        {
+          "room_name": "Twin Room Premium",
+          "max_occupancy": 2,
+          "accurate_media": false
+        },
+        {
+          "room_name": "Standard Room Two Single Beds Non Refundable",
+          "max_occupancy": 2,
+          "accurate_media": false
+        },
+        {
+          "room_name": "Standard Room Queen Size Bed Non Refundable",
+          "max_occupancy": 2,
+          "accurate_media": false
+        },
+        {
+          "room_name": "Premium Room , Two Single Size Beds , With Value Added Benefits Non Refundable",
+          "max_occupancy": 2,
+          "accurate_media": false
+        },
+        {
+          "room_name": "Premium Room , Queen Size Bed , With Value Added Benefits Non Refundable",
+          "max_occupancy": 2,
+          "accurate_media": false
+        },
+        {
+          "room_name": "Standard Double",
+          "max_occupancy": 2,
+          "accurate_media": false
+        },
+        {
+          "room_name": "Premium Room , Two Single Size Beds, With Value Added Benefits",
+          "max_occupancy": 2,
+          "accurate_media": false
+        },
+        {
+          "room_name": "Premium Room , Queen Size Bed, With Value Added Benefits",
+          "max_occupancy": 2,
+          "accurate_media": false
+        },
+        {
+          "room_name": "Standard Double Room (Full Double Bed)",
+          "max_occupancy": 2,
+          "accurate_media": false
+        },
+        {
+          "room_name": "Premium Double Room (Twin Beds)",
+          "max_occupancy": 2,
+          "accurate_media": false
+        },
+        {
+          "room_name": "Standard Double Room (Twin Beds)",
+          "max_occupancy": 2,
+          "accurate_media": false
+        },
+        {
+          "room_name": "Premium Double Room (Full Double Bed) (Queen Size Bed)",
+          "max_occupancy": 2,
+          "accurate_media": false
+        },
+        {
+          "room_name": "Standard Twin",
+          "max_occupancy": 2,
+          "accurate_media": false
+        },
+        {
+          "room_name": "Premium Room 1 Queen Bed Accessible",
+          "max_occupancy": 2,
+          "accurate_media": false
+        },
+        {
+          "room_name": "Premium Room 2 Twin Beds Accessible",
+          "max_occupancy": 2,
+          "accurate_media": false
+        },
+        {
+          "room_name": "Standard Room 1 Queen Bed",
+          "max_occupancy": 2,
+          "accurate_media": false
+        },
+        {
+          "room_name": "Standard Room 2 Twin Beds",
+          "max_occupancy": 2,
+          "accurate_media": false
+        },
+        {
+          "room_name": "Premium Room , Two Single Size Beds , With Value Added Benefits",
+          "max_occupancy": 2,
+          "accurate_media": false
+        },
+        {
+          "room_name": "Standard Room Queen Size Bed",
+          "max_occupancy": 2,
+          "accurate_media": false
+        },
+        {
+          "room_name": "Standard Room Two Single Beds",
+          "max_occupancy": 2,
+          "accurate_media": false
+        },
+        {
+          "room_name": "Premium Room , Queen Size Bed , With Value Added Benefits",
+          "max_occupancy": 2,
+          "accurate_media": false
+        }
+      ],
+      "rooms_agoda": [
+        {
+          "agoda_room_id": 287200601,
+          "room_name": "Premium Room , Two Single-Size Beds, With Value Added Benefits",
+          "max_occupancy": 2,
+          "beds": "2 beds",
+          "rate_plan_count": 10,
+          "images": [
+            "https://pix8.agoda.net/hotelImages/21605975/296496800/bbb40c6345897958d88a6bf9790eaa0e.jpg?ca=17&ce=1&s=1024x768",
+            "https://pix8.agoda.net/hotelImages/21605975/461777030/188da342e2150e58d4cb59b3ac7766e4.jpeg?ce=3&s=1024x768",
+            "https://pix8.agoda.net/hotelImages/21605975/461777030/42a80e76ec9e09835b616974415fa0a1.jpeg?ce=3&s=1024x768",
+            "https://pix8.agoda.net/hotelImages/7543406/0/662fd2eaf0adc4325ba39a0b4dd5d5fa.jpg?ca=16&ce=1&s=1024x768",
+            "https://pix8.agoda.net/hotelImages/21605975/461777030/828c486369aa0ce76fd36861e2ee287f.jpeg?ce=3&s=1024x768",
+            "https://pix8.agoda.net/hotelImages/1157585/287200601/3c6596dafa66aafa0dec0f10d933132d.jpg?ca=17&ce=1&s=1024x768",
+            "https://pix8.agoda.net/hotelImages/21605975/461777030/cb95f7dc920c379cfdd0779c33f6c354.jpeg?ce=3&s=1024x768",
+            "https://q-xx.bstatic.com/xdata/images/hotel/max1024x768/411938620.jpg?k=bf986d8ecbbeffb692200be442b967343c9ac47196727fafee5a46580e7f7629&o=",
+            "https://q-xx.bstatic.com/xdata/images/hotel/max1024x768/411938976.jpg?k=660173f107a2b4b698eb5a6c19aa2529f5bff0f310ca47b916bf3407482a619a&o=",
+            "https://pix8.agoda.net/hotelImages/1157585/287200601/cf34eb8e460d647dc6781267135ba7c4.jpg?ca=17&ce=1&s=1024x768",
+            "https://pix8.agoda.net/hotelImages/21605975/296496800/b2a91aaf5387a44f9318753dbe9f304c.jpg?ca=17&ce=1&s=1024x768",
+            "https://pix8.agoda.net/hotelImages/1157585/287200601/0abfa8ef29cab561d682b2111e4902a5.jpg?ca=17&ce=1&s=1024x768",
+            "https://pix8.agoda.net/hotelImages/21605975/461777030/de3b6218c62cb7d952ff24b53ccabcdb.jpeg?ce=3&s=1024x768",
+            "https://pix8.agoda.net/hotelImages/21605975/296496800/08f7abd3b4ec177f9f7cba8f9f9894b6.jpg?ca=17&ce=1&s=1024x768",
+            "https://q-xx.bstatic.com/xdata/images/hotel/max1024x768/411938446.jpg?k=5cc20e3b859bf4f6280cf8c700167f3011f10c601581b4053f278f5a478bbb4a&o=",
+            "https://pix8.agoda.net/hotelImages/21605975/461777030/32a24af822902d6976401509d3cebdcd.jpeg?ce=3&s=1024x768",
+            "https://q-xx.bstatic.com/xdata/images/hotel/max1024x768/411939369.jpg?k=1a8b7e934ef07ff868e01c8e71d2b0b405d0625b46312a5d5b0296ff6f8f8c7d&o="
+          ],
+          "image_captions": [
+            "Guestroom",
+            "Guestroom",
+            "Guestroom",
+            "Guestroom",
+            "Guestroom",
+            "Bedroom",
+            "Guestroom",
+            "",
+            "",
+            "Bedroom",
+            "Guestroom",
+            "Bathroom",
+            "Guestroom",
+            "Guestroom",
+            "",
+            "Guestroom",
+            ""
+          ],
+          "thumbnail": "https://pix8.agoda.net/hotelImages/21605975/296496800/bbb40c6345897958d88a6bf9790eaa0e.jpg?ca=17&ce=1&s=208x117&ar=16x9"
+        },
+        {
+          "agoda_room_id": 287200600,
+          "room_name": "Premium Room , Queen Size Bed, With Value Added Benefits",
+          "max_occupancy": 2,
+          "beds": "1 bed",
+          "rate_plan_count": 10,
+          "images": [
+            "https://pix8.agoda.net/hotelImages/1157585/-1/a7c788c729a00f939bb81b5baf0cba89.jpg?ce=0&s=1024x768",
+            "https://pix8.agoda.net/hotelImages/21605975/461777037/e76b3d31e5ca95466dc2b7f5ccd7c1ed.jpeg?ce=3&s=1024x768",
+            "https://pix8.agoda.net/hotelImages/21605975/461777037/42a80e76ec9e09835b616974415fa0a1.jpeg?ce=3&s=1024x768",
+            "https://pix8.agoda.net/hotelImages/21605975/461777037/d07f75a2c163ec42db5f1797be9d4631.jpeg?ce=3&s=1024x768",
+            "https://pix8.agoda.net/hotelImages/21605975/461777037/c31c428d68c200b2d139e8152a3d508d.jpeg?ce=3&s=1024x768",
+            "https://pix8.agoda.net/hotelImages/21605975/461777037/df34368a055a2a3d9ba69aebba44f03e.jpeg?ce=3&s=1024x768",
+            "https://pix8.agoda.net/hotelImages/1157585/287200600/ad442b36b02dfe7eaef70ddee18f219e.jpg?ca=17&ce=1&s=1024x768",
+            "https://pix8.agoda.net/hotelImages/1157585/287200600/cd63649e3ffddfeccccddd242c27c8ce.jpg?ca=17&ce=1&s=1024x768",
+            "https://pix8.agoda.net/hotelImages/1157585/287200600/f2c00560fde09797b6165a2a9509b864.jpg?ca=17&ce=1&s=1024x768",
+            "https://pix8.agoda.net/hotelImages/1157585/287200600/0abfa8ef29cab561d682b2111e4902a5.jpg?ca=17&ce=1&s=1024x768",
+            "https://pix8.agoda.net/hotelImages/21605975/461777037/5b912c44859f792a7d2423eace6acb98.jpeg?ce=3&s=1024x768",
+            "https://pix8.agoda.net/hotelImages/21605975/296496801/08f7abd3b4ec177f9f7cba8f9f9894b6.jpg?ca=17&ce=1&s=1024x768",
+            "https://q-xx.bstatic.com/xdata/images/hotel/max1024x768/810295457.jpg?k=4d357af95e2e50399c523e0d266f6b6a7a3dd3769c6bbbd163fa0479e9f637b6&o=",
+            "https://q-xx.bstatic.com/xdata/images/hotel/max1024x768/411937650.jpg?k=78f9ffbac1e6538d66a59dce6fb2551dfe8fe06243adc1b8985a201c9e103ac7&o=",
+            "https://q-xx.bstatic.com/xdata/images/hotel/max1024x768/411937947.jpg?k=dea8b91e964aeb9e4571830fe0fc101cddc7c815237b6be7b2cc99d2ff11edb2&o=",
+            "https://q-xx.bstatic.com/xdata/images/hotel/max1024x768/411938147.jpg?k=8eae718d6e9d7af9e1d90b84c9cfdc085be7328d0c0a4a24f599b0028ec9f6c7&o=",
+            "https://q-xx.bstatic.com/xdata/images/hotel/max1024x768/411937338.jpg?k=2a3bed267de9e41f91c35616f8cbe49570cf17cf9f7ae6a83cf571a2695647aa&o=",
+            "https://pix8.agoda.net/hotelImages/21605975/296496801/12e362bd8fc5a7b25ccff50344b541ef.jpg?ca=17&ce=1&s=1024x768"
+          ],
+          "image_captions": [
+            "Room plan",
+            "Guestroom",
+            "Guestroom",
+            "Guestroom",
+            "Guestroom",
+            "Guestroom",
+            "Bedroom",
+            "Bedroom",
+            "Bedroom",
+            "Bathroom",
+            "Guestroom",
+            "Guestroom",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "Guestroom"
+          ],
+          "thumbnail": "https://pix8.agoda.net/hotelImages/1157585/-1/a7c788c729a00f939bb81b5baf0cba89.jpg?ce=0&s=208x117&ar=16x9"
+        },
+        {
+          "agoda_room_id": 6983440,
+          "room_name": "Standard Twin",
+          "max_occupancy": 2,
+          "beds": "2 beds",
+          "rate_plan_count": 10,
+          "images": [
+            "https://pix8.agoda.net/hotelImages/21605975/294919017/bbb40c6345897958d88a6bf9790eaa0e.jpg?ca=17&ce=1&s=1024x768",
+            "https://pix8.agoda.net/hotelImages/21605975/461777032/188da342e2150e58d4cb59b3ac7766e4.jpeg?ce=3&s=1024x768",
+            "https://pix8.agoda.net/hotelImages/21605975/461777032/42a80e76ec9e09835b616974415fa0a1.jpeg?ce=3&s=1024x768",
+            "https://pix8.agoda.net/hotelImages/7543406/0/662fd2eaf0adc4325ba39a0b4dd5d5fa.jpg?ca=16&ce=1&s=1024x768",
+            "https://pix8.agoda.net/hotelImages/21605975/461777032/828c486369aa0ce76fd36861e2ee287f.jpeg?ce=3&s=1024x768",
+            "https://pix8.agoda.net/hotelImages/21605975/294919017/7252089ba135c878b1bfe48ac816bcb0.jpg?ca=17&ce=1&s=1024x768",
+            "https://pix8.agoda.net/hotelImages/21605975/461777032/cb95f7dc920c379cfdd0779c33f6c354.jpeg?ce=3&s=1024x768",
+            "https://q-xx.bstatic.com/xdata/images/hotel/max1024x768/411937163.jpg?k=425ce748f03c9846541f8d57915d609fe5a73b87666a5e8da7a0b2a226b0d0a8&o=",
+            "https://pix8.agoda.net/hotelImages/21605975/461777032/de3b6218c62cb7d952ff24b53ccabcdb.jpeg?ce=3&s=1024x768",
+            "https://pix8.agoda.net/hotelImages/21605975/294919017/1878dda677c3b77ce63255b18818df20.jpg?ca=17&ce=1&s=1024x768",
+            "https://pix8.agoda.net/hotelImages/1157585/-1/7bc81332b544091c62be1c883dd7291c.jpg?ca=13&ce=1&s=1024x768",
+            "https://q-xx.bstatic.com/xdata/images/hotel/max1024x768/60613324.jpg?k=0f4ba8d4e4bb339a4ce234fbb2db065dd47783b37ebed299d5d34af760177ae4&o=",
+            "https://q-xx.bstatic.com/xdata/images/hotel/max1024x768/411937243.jpg?k=f0e3be4497ccfc0be2db55099af5aa3949b9066c4ffbd68a2d37698f37484e3d&o=",
+            "https://pix8.agoda.net/hotelImages/1157585/-1/344a3b26cea9a9bdeacef32d0a6fc362.jpg?ca=13&ce=1&s=1024x768",
+            "https://q-xx.bstatic.com/xdata/images/hotel/max1024x768/411936986.jpg?k=592bf8ca69bb41ea182ecc3bde76c3080e78c39c11c734a5d58795c9dc2ebf45&o=",
+            "https://pix8.agoda.net/hotelImages/1157585/-1/fe2b3c16d644db88d5e9b9a02f82b29b.jpg?ca=13&ce=1&s=1024x768"
+          ],
+          "image_captions": [
+            "Guestroom",
+            "Guestroom",
+            "Guestroom",
+            "Guestroom",
+            "Guestroom",
+            "Guestroom",
+            "Guestroom",
+            "",
+            "Guestroom",
+            "Guestroom",
+            "Bathroom",
+            "",
+            "",
+            "Bed",
+            "",
+            "Guestroom"
+          ],
+          "thumbnail": "https://pix8.agoda.net/hotelImages/21605975/294919017/bbb40c6345897958d88a6bf9790eaa0e.jpg?ca=17&ce=1&s=208x117&ar=16x9"
+        },
+        {
+          "agoda_room_id": 6983434,
+          "room_name": "Standard Double",
+          "max_occupancy": 2,
+          "beds": "1 bed",
+          "rate_plan_count": 10,
+          "images": [
+            "https://pix8.agoda.net/hotelImages/1157585/-1/b2bb304091d58d4189535172c2efa60c.jpg?ca=13&ce=1&s=1024x768",
+            "https://pix8.agoda.net/hotelImages/21605975/461777034/e76b3d31e5ca95466dc2b7f5ccd7c1ed.jpeg?ce=3&s=1024x768",
+            "https://pix8.agoda.net/hotelImages/21605975/461777034/42a80e76ec9e09835b616974415fa0a1.jpeg?ce=3&s=1024x768",
+            "https://pix8.agoda.net/hotelImages/21605975/461777034/c31c428d68c200b2d139e8152a3d508d.jpeg?ce=3&s=1024x768",
+            "https://pix8.agoda.net/hotelImages/21605975/461777034/df34368a055a2a3d9ba69aebba44f03e.jpeg?ce=3&s=1024x768",
+            "https://pix8.agoda.net/hotelImages/1157585/-1/c6090c053bb42e7e8014072832f6ae69.jpg?ca=13&ce=1&s=1024x768",
+            "https://pix8.agoda.net/hotelImages/1157585/-1/c169f904b76b61e64f5c45a653c30bfa.jpg?ca=13&ce=1&s=1024x768",
+            "https://pix8.agoda.net/hotelImages/21605975/461777034/5b912c44859f792a7d2423eace6acb98.jpeg?ce=3&s=1024x768",
+            "https://pix8.agoda.net/hotelImages/1157585/-1/1357f36df8cda1adf3880bbfaff35eb5.jpg?ca=13&ce=1&s=1024x768",
+            "https://q-xx.bstatic.com/xdata/images/hotel/max1024x768/60613324.jpg?k=0f4ba8d4e4bb339a4ce234fbb2db065dd47783b37ebed299d5d34af760177ae4&o=",
+            "https://pix8.agoda.net/hotelImages/21605975/294919018/08f7abd3b4ec177f9f7cba8f9f9894b6.jpg?ca=16&ce=1&s=1024x768",
+            "https://q-xx.bstatic.com/xdata/images/hotel/max1024x768/411936645.jpg?k=27afeb2a576f3d71765fac7c69963bf22dccf61383727f934ccdcd9a9a91bccf&o=",
+            "https://q-xx.bstatic.com/xdata/images/hotel/max1024x768/411936362.jpg?k=ae0c7653d612b41e4ea32a09536d90c0bab70928ae458f3f98569be637ead230&o=",
+            "https://q-xx.bstatic.com/xdata/images/hotel/max1024x768/810295457.jpg?k=4d357af95e2e50399c523e0d266f6b6a7a3dd3769c6bbbd163fa0479e9f637b6&o=",
+            "https://pix8.agoda.net/hotelImages/21605975/461777034/32a24af822902d6976401509d3cebdcd.jpeg?ce=3&s=1024x768",
+            "https://q-xx.bstatic.com/xdata/images/hotel/max1024x768/411936760.jpg?k=321e7f4f55c4eca9632004f89b7dddbca5e5d21577f4cecd087b3c0d80452c43&o="
+          ],
+          "image_captions": [
+            "View",
+            "Guestroom",
+            "Guestroom",
+            "Guestroom",
+            "Guestroom",
+            "Room plan",
+            "Bed",
+            "Guestroom",
+            "Bathroom",
+            "",
+            "Guestroom",
+            "",
+            "",
+            "",
+            "Guestroom",
+            ""
+          ],
+          "thumbnail": "https://pix8.agoda.net/hotelImages/1157585/-1/b2bb304091d58d4189535172c2efa60c.jpg?ca=13&ce=1&s=208x117&ar=16x9"
+        }
+      ]
+    },
+    {
+      "bookme_id": 452852,
+      "agoda_id": 7471403,
+      "slug": "vida-creek-harbour-31",
+      "destination": "Dubai",
+      "hotel_name_bookme": "Vida Creek Harbour",
+      "hotel_name_agoda": "Vida Creek Harbour",
+      "address_bookme": "Ras Al Khor - Dubai Creek Harbour, , Dubai, 0, United Arab Emirates",
+      "address_agoda": "Dubai Creek Harbour, Dubai Festival City, Dubai, United Arab Emirates, Dubai Creek Harbour",
+      "agoda_url": "https://www.agoda.com/search?hotel=7471403",
+      "match_confidence": "high",
+      "bookme_rate_plan_count": 47,
+      "agoda_source": "escalation",
+      "rooms_bookme": [
+        {
+          "room_name": "Deluxe Room",
+          "max_occupancy": 2,
+          "accurate_media": false
+        },
+        {
+          "room_name": "Double Room",
+          "max_occupancy": 2,
+          "accurate_media": false
+        },
+        {
+          "room_name": "Twin Deluxe",
+          "max_occupancy": 2,
+          "accurate_media": false
+        },
+        {
+          "room_name": "Double Deluxe King Bed",
+          "max_occupancy": 2,
+          "accurate_media": false
+        },
+        {
+          "room_name": "Double Standard",
+          "max_occupancy": 2,
+          "accurate_media": false
+        },
+        {
+          "room_name": "Deluxe Twin Room",
+          "max_occupancy": 2,
+          "accurate_media": false
+        },
+        {
+          "room_name": "Deluxe Room Partial Marina View Twin",
+          "max_occupancy": 2,
+          "accurate_media": false
+        },
+        {
+          "room_name": "Double Room Sea View Deluxe",
+          "max_occupancy": 2,
+          "accurate_media": false
+        },
+        {
+          "room_name": "Twin Deluxe With Views",
+          "max_occupancy": 2,
+          "accurate_media": false
+        },
+        {
+          "room_name": "Twin Deluxe Sea View",
+          "max_occupancy": 2,
+          "accurate_media": false
+        },
+        {
+          "room_name": "Double Room Deluxe",
+          "max_occupancy": 2,
+          "accurate_media": false
+        },
+        {
+          "room_name": "Deluxe Partial Marina View Twin",
+          "max_occupancy": 2,
+          "accurate_media": false
+        },
+        {
+          "room_name": "Twin Deluxe City View",
+          "max_occupancy": 2,
+          "accurate_media": false
+        },
+        {
+          "room_name": "Deluxe Room King",
+          "max_occupancy": 2,
+          "accurate_media": false
+        },
+        {
+          "room_name": "Double Deluxe With Views",
+          "max_occupancy": 2,
+          "accurate_media": false
+        },
+        {
+          "room_name": "Double Room Sea View Deluxe Balcony Or Terrace",
+          "max_occupancy": 2,
+          "accurate_media": false
+        },
+        {
+          "room_name": "Deluxe Marina View With Balcony",
+          "max_occupancy": 2,
+          "accurate_media": false
+        },
+        {
+          "room_name": "Family Stay Interconnected Deluxe Rooms",
+          "max_occupancy": 2,
+          "accurate_media": false
+        },
+        {
+          "room_name": "Family Room Deluxe",
+          "max_occupancy": 2,
+          "accurate_media": false
+        },
+        {
+          "room_name": "Deluxe Room Marina View With Balcony",
+          "max_occupancy": 2,
+          "accurate_media": false
+        },
+        {
+          "room_name": "Premier Suite Corner Marina View",
+          "max_occupancy": 2,
+          "accurate_media": false
+        },
+        {
+          "room_name": "Suite Premier Suite Corner Marina View",
+          "max_occupancy": 2,
+          "accurate_media": false
+        },
+        {
+          "room_name": "Suite Sea View Premier",
+          "max_occupancy": 2,
+          "accurate_media": false
+        },
+        {
+          "room_name": "Suite Premier Sea View",
+          "max_occupancy": 2,
+          "accurate_media": false
+        },
+        {
+          "room_name": "Premier Suite, Marina View, Corner",
+          "max_occupancy": 2,
+          "accurate_media": false
+        },
+        {
+          "room_name": "Corner Premier Suite Marina View",
+          "max_occupancy": 2,
+          "accurate_media": false
+        },
+        {
+          "room_name": "Double Deluxe Marina View With Balcony",
+          "max_occupancy": 2,
+          "accurate_media": false
+        }
+      ],
+      "rooms_agoda": [
+        {
+          "agoda_room_id": 489840392,
+          "room_name": "Deluxe Twin",
+          "max_occupancy": 2,
+          "beds": "2 beds",
+          "rate_plan_count": 6,
+          "images": [
+            "https://pix8.agoda.net/property/28771825/1376539977/095385e8ae10785bfc3cb11abc6a8c51.jpeg?ce=3&s=1024x768",
+            "https://q-xx.bstatic.com/xdata/images/hotel/max1024x768/348005242.jpg?k=e34d3fd5799e683088028399cd2470a9b124ded03f5c7972a3df118f63416538&o=",
+            "https://pix8.agoda.net/property/7471403/0/e7c9ba85d55c899cd4f40ac0b422a691.jpeg?ce=0&s=1024x768",
+            "https://pix8.agoda.net/property/28771825/1394195804/764ea476aa613b221e6caa9f967888f2.jpeg?ce=3&s=1024x768",
+            "https://pix8.agoda.net/property/7471403/375208051/c1a198f8c536e7e8774d20c1565bb4de.jpeg?s=1024x768",
+            "https://pix8.agoda.net/property/28771825/1394195804/4522212a9d85e9ba9dd76c7e6be073b7.jpeg?ce=3&s=1024x768",
+            "https://pix8.agoda.net/property/28771825/1376539977/8574859551d5f4f54df5262e57b15321.jpeg?ce=3&s=1024x768",
+            "https://pix8.agoda.net/property/7471403/872950726/1a40014ceedb47dd061c6cddfdbf4137.jpeg?ce=0&s=1024x768",
+            "https://q-xx.bstatic.com/xdata/images/hotel/max1024x768/348005262.jpg?k=ecc9f1ae875b16ec32b20f30d0f1723d9f9ea1bd073c9fa341c250ff3105dd20&o=",
+            "https://pix8.agoda.net/property/28771825/1394195804/8076daf6ca4f075427cde4470ddbf0ed.jpeg?ce=3&s=1024x768"
+          ],
+          "image_captions": [
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            ""
+          ],
+          "thumbnail": "https://pix8.agoda.net/property/28771825/1376539977/095385e8ae10785bfc3cb11abc6a8c51.jpeg?ce=3&s=208x117&ar=16x9"
+        },
+        {
+          "agoda_room_id": 89176673,
+          "room_name": "Deluxe Room",
+          "max_occupancy": 2,
+          "beds": "1 bed",
+          "rate_plan_count": 6,
+          "images": [
+            "https://pix8.agoda.net/property/7471403/331371267/3b9a7a53ef0b4809f3e3854ca0447b1c.jpeg?s=1024x768",
+            "https://q-xx.bstatic.com/xdata/images/hotel/max1024x768/302996008.jpg?k=5390ac8fd40eca4a00ff33b128ca68a142b73dedbc5922659d9bce755dc34bd2&o=",
+            "https://pix8.agoda.net/property/7471403/0/e7c9ba85d55c899cd4f40ac0b422a691.jpeg?ce=0&s=1024x768",
+            "https://pix8.agoda.net/property/7471403/375208051/c1a198f8c536e7e8774d20c1565bb4de.jpeg?s=1024x768",
+            "https://pix8.agoda.net/property/7471403/872950681/5d8de45770ad75376338cd9f8e9617d7.jpeg?ce=0&s=1024x768",
+            "https://pix8.agoda.net/hotelImages/7471403/-1/5f0455c565ee90c58aa6f91a211be144.jpg?ca=20&ce=1&s=1024x768",
+            "https://pix8.agoda.net/hotelImages/7471403/-1/bac9287312dc9bb81dc4dd24ba0a9cf7.jpg?ce=0&s=1024x768"
+          ],
+          "image_captions": [
+            "",
+            "",
+            "",
+            "",
+            "",
+            "Bed",
+            "Bathroom"
+          ],
+          "thumbnail": "https://pix8.agoda.net/property/7471403/331371267/3b9a7a53ef0b4809f3e3854ca0447b1c.jpeg?s=208x117&ar=16x9"
+        },
+        {
+          "agoda_room_id": 489842965,
+          "room_name": "Deluxe Partial Sea View Twin Room",
+          "max_occupancy": 2,
+          "beds": "2 beds",
+          "rate_plan_count": 3,
+          "images": [
+            "https://pix8.agoda.net/hotelImages/7471403/-1/9a4d34a2f2513c7037d42f6c421d57d6.jpg?ce=0&s=1024x768"
+          ],
+          "image_captions": [
+            "Bed"
+          ],
+          "thumbnail": "https://pix8.agoda.net/hotelImages/7471403/-1/9a4d34a2f2513c7037d42f6c421d57d6.jpg?ce=0&s=208x117&ar=16x9"
+        },
+        {
+          "agoda_room_id": 109274117,
+          "room_name": "Partial Marina View Deluxe Room King",
+          "max_occupancy": 3,
+          "beds": "1 bed",
+          "rate_plan_count": 3,
+          "images": [
+            "https://q-xx.bstatic.com/xdata/images/hotel/max1024x768/344547873.jpg?k=a99ff3e3293067afc14e2c1f2f9095af10aaddde6e4ba488dfbe75f4dd055f4c&o=",
+            "https://q-xx.bstatic.com/xdata/images/hotel/max1024x768/218923791.jpg?k=4854c141a067654d340a8c9495a10c94275a5091df9dda826027aeb753f944b0&o="
+          ],
+          "image_captions": [
+            "",
+            ""
+          ],
+          "thumbnail": "https://q-xx.bstatic.com/xdata/images/hotel/max300/344547873.jpg?k=a99ff3e3293067afc14e2c1f2f9095af10aaddde6e4ba488dfbe75f4dd055f4c&o="
+        },
+        {
+          "agoda_room_id": 89176764,
+          "room_name": "Deluxe Marina View Room King",
+          "max_occupancy": 2,
+          "beds": "1 bed",
+          "rate_plan_count": 6,
+          "images": [
+            "https://pix8.agoda.net/property/7471403/872950768/74f1bafa96769e9a8963a55011836a62.jpeg?ce=0&s=1024x768",
+            "https://pix8.agoda.net/property/7471403/872950703/de824177d2d2e8471a6dc14eb3e8a266.jpeg?ce=0&s=1024x768",
+            "https://q-xx.bstatic.com/xdata/images/hotel/max1024x768/218923791.jpg?k=4854c141a067654d340a8c9495a10c94275a5091df9dda826027aeb753f944b0&o=",
+            "https://q-xx.bstatic.com/xdata/images/hotel/max1024x768/218923785.jpg?k=99006fb0497d8b34818beab58e39935ef076639b4b181777d288f48784816a28&o=",
+            "https://pix8.agoda.net/hotelImages/7471403/-1/7986be6e9bb99f753b0910bded3cf9ef.jpg?ca=9&ce=1&s=1024x768"
+          ],
+          "image_captions": [
+            "",
+            "",
+            "",
+            "",
+            "Bed"
+          ],
+          "thumbnail": "https://pix8.agoda.net/property/7471403/872950768/74f1bafa96769e9a8963a55011836a62.jpeg?ce=0&s=208x117&ar=16x9"
+        },
+        {
+          "agoda_room_id": 328332400,
+          "room_name": "Deluxe with Balcony",
+          "max_occupancy": 2,
+          "beds": "1 bed",
+          "rate_plan_count": 3,
+          "images": [
+            "https://pix8.agoda.net/hotelImages/7471403/-1/da1a7b63764837c449753d6b7c3ac7f0.jpg?ca=20&ce=1&s=1024x768",
+            "https://pix8.agoda.net/property/7471403/375208051/c1a198f8c536e7e8774d20c1565bb4de.jpeg?s=1024x768",
+            "https://pix8.agoda.net/property/7471403/0/e7c9ba85d55c899cd4f40ac0b422a691.jpeg?ce=0&s=1024x768",
+            "https://pix8.agoda.net/property/7471403/375208050/0a063d253c6903a94a47e142f3aa848f.jpeg?ce=0&s=1024x768",
+            "https://pix8.agoda.net/property/7471403/879471569/0b892f0d7f81e526012cdba15a8225d9.jpeg?ce=0&s=1024x768",
+            "https://pix8.agoda.net/hotelImages/7471403/-1/73b6da52c7db29118c8034d69240ff55.jpg?ca=9&ce=1&s=1024x768"
+          ],
+          "image_captions": [
+            "View",
+            "",
+            "",
+            "",
+            "",
+            "Bathroom"
+          ],
+          "thumbnail": "https://pix8.agoda.net/hotelImages/7471403/-1/da1a7b63764837c449753d6b7c3ac7f0.jpg?ca=20&ce=1&s=208x117&ar=16x9"
+        },
+        {
+          "agoda_room_id": 893932040,
+          "room_name": "Family Stay - Interconnected Deluxe Rooms",
+          "max_occupancy": 4,
+          "beds": "3 beds",
+          "rate_plan_count": 2,
+          "images": [
+            "https://q-xx.bstatic.com/xdata/images/hotel/max1024x768/302996008.jpg?k=5390ac8fd40eca4a00ff33b128ca68a142b73dedbc5922659d9bce755dc34bd2&o=",
+            "https://pix8.agoda.net/property/28771825/1376539520/dec228f67da7f087fd74e7f48c6cf42f.jpeg?ce=3&s=1024x768",
+            "https://pix8.agoda.net/property/28771825/1376539520/08be2ea29401bbdfff2d08589e4aea35.jpeg?ce=3&s=1024x768",
+            "https://pix8.agoda.net/property/28771825/1376539520/8574859551d5f4f54df5262e57b15321.jpeg?ce=3&s=1024x768",
+            "https://q-xx.bstatic.com/xdata/images/hotel/max1024x768/218923791.jpg?k=4854c141a067654d340a8c9495a10c94275a5091df9dda826027aeb753f944b0&o="
+          ],
+          "image_captions": [
+            "",
+            "",
+            "",
+            "",
+            ""
+          ],
+          "thumbnail": "https://q-xx.bstatic.com/xdata/images/hotel/max300/302996008.jpg?k=5390ac8fd40eca4a00ff33b128ca68a142b73dedbc5922659d9bce755dc34bd2&o="
+        },
+        {
+          "agoda_room_id": 89176886,
+          "room_name": "Premier Corner Marina View Suite",
+          "max_occupancy": 2,
+          "beds": "1 bed",
+          "rate_plan_count": 3,
+          "images": [
+            "https://pix8.agoda.net/hotelImages/7471403/-1/5ffed12bf0b7c958f0d7f1bdaf6ad5c5.jpg?ca=20&ce=1&s=1024x768",
+            "https://pix8.agoda.net/property/7471403/872950703/de824177d2d2e8471a6dc14eb3e8a266.jpeg?ce=0&s=1024x768",
+            "https://q-xx.bstatic.com/xdata/images/hotel/max1024x768/218923997.jpg?k=4709f79754f65d2772ee2ee1faf8f64243ab14f3748f76b363398888875b43a9&o=",
+            "https://q-xx.bstatic.com/xdata/images/hotel/max1024x768/218923990.jpg?k=aa7a3ffee2a4af3d1bbd65bcf42dbd31c20941724c920ef67fa3644a6f1e6c17&o=",
+            "https://q-xx.bstatic.com/xdata/images/hotel/max1024x768/297472867.jpg?k=65d4d2717ee0fcc210fea47dcfa7ef9e2d9539ed351a7c1057c736924ab38854&o=",
+            "https://pix8.agoda.net/property/56144777/872950703/d5ed140ca45e234bc5c7ab632cc4f70b.jpeg?ce=0&s=1024x768"
+          ],
+          "image_captions": [
+            "Bed",
+            "",
+            "",
+            "",
+            "",
+            ""
+          ],
+          "thumbnail": "https://pix8.agoda.net/hotelImages/7471403/-1/5ffed12bf0b7c958f0d7f1bdaf6ad5c5.jpg?ca=20&ce=1&s=208x117&ar=16x9"
+        }
+      ]
+    },
+    {
+      "bookme_id": 453245,
+      "agoda_id": 23780397,
+      "slug": "citadines-culture-village-dubai-waterfront-jadaf",
+      "destination": "Dubai",
+      "hotel_name_bookme": "Citadines Culture Village Dubai  Waterfront Jadaf",
+      "hotel_name_agoda": "Citadines Culture Village Dubai",
+      "address_bookme": "Al Jaddaf, Culture Village, United Arab Emirates, Dubai, , United Arab Emirates",
+      "address_agoda": "Al Jaddaf, Culture Village Dubai, Al Jaddaf, Dubai, United Arab Emirates",
+      "agoda_url": "https://www.agoda.com/search?hotel=23780397",
+      "match_confidence": "medium",
+      "bookme_rate_plan_count": 38,
+      "agoda_source": "http",
+      "rooms_bookme": [
+        {
+          "room_name": "Standard Room",
+          "max_occupancy": 2,
+          "accurate_media": false
+        },
+        {
+          "room_name": "De Luxe",
+          "max_occupancy": 2,
+          "accurate_media": false
+        },
+        {
+          "room_name": "Premier",
+          "max_occupancy": 2,
+          "accurate_media": false
+        },
+        {
+          "room_name": "Deluxe Room",
+          "max_occupancy": 2,
+          "accurate_media": false
+        },
+        {
+          "room_name": "Premier Room",
+          "max_occupancy": 2,
+          "accurate_media": false
+        },
+        {
+          "room_name": "Twin/Double Room",
+          "max_occupancy": 2,
+          "accurate_media": false
+        },
+        {
+          "room_name": "Executive Room",
+          "max_occupancy": 2,
+          "accurate_media": false
+        },
+        {
+          "room_name": "Executive",
+          "max_occupancy": 2,
+          "accurate_media": false
+        },
+        {
+          "room_name": "Standard Room With And Without Balcony (Main Road)",
+          "max_occupancy": 2,
+          "accurate_media": false
+        },
+        {
+          "room_name": "Deluxe Room With Balcony (Canal View)",
+          "max_occupancy": 2,
+          "accurate_media": false
+        },
+        {
+          "room_name": "Executive Room With Balcony (Creek View)",
+          "max_occupancy": 2,
+          "accurate_media": false
+        },
+        {
+          "room_name": "Premier Room With Balcony (Promenade And City View)",
+          "max_occupancy": 2,
+          "accurate_media": false
+        }
+      ],
+      "rooms_agoda": []
+    },
+    {
+      "bookme_id": 452873,
+      "agoda_id": 10610372,
+      "slug": "radisson-blu-hotel-dubai-canal-view-875",
+      "destination": "Dubai",
+      "hotel_name_bookme": "Radisson Blu Hotel, Dubai Canal View",
+      "hotel_name_agoda": "Radisson Blu Dubai Canal View",
+      "address_bookme": "Marasi Drive, Business bay, PO Box 16021 Business Bay Dubai, Dubai, United Arab Emirates, Dubai, 16021, United Arab Emirates",
+      "address_agoda": "Marasi Drive, Business Bay, Po Box 16021, Business Bay, Dubai, United Arab Emirates, 16021",
+      "agoda_url": "https://www.agoda.com/search?hotel=10610372",
+      "match_confidence": "high",
+      "bookme_rate_plan_count": 95,
+      "agoda_source": "escalation",
+      "rooms_bookme": [
+        {
+          "room_name": "Standard Room",
+          "max_occupancy": 2,
+          "accurate_media": false
+        },
+        {
+          "room_name": "Standard Room , 1 King Bed",
+          "max_occupancy": 2,
+          "accurate_media": false
+        },
+        {
+          "room_name": "Standard Room , 2 Twin Beds",
+          "max_occupancy": 2,
+          "accurate_media": false
+        },
+        {
+          "room_name": "Standard Room Canal View",
+          "max_occupancy": 2,
+          "accurate_media": false
+        },
+        {
+          "room_name": "Superior Room",
+          "max_occupancy": 2,
+          "accurate_media": false
+        },
+        {
+          "room_name": "Standard Room (Canal View) , 1 King Bed",
+          "max_occupancy": 2,
+          "accurate_media": false
+        },
+        {
+          "room_name": "Standard Room (Canal View) , 2 Twin Beds",
+          "max_occupancy": 2,
+          "accurate_media": false
+        },
+        {
+          "room_name": "Superior Room , 1 King Bed",
+          "max_occupancy": 2,
+          "accurate_media": false
+        },
+        {
+          "room_name": "Superior Room , 2 Twin Beds",
+          "max_occupancy": 2,
+          "accurate_media": false
+        },
+        {
+          "room_name": "Superior Room (Canal View) , 1 King Bed",
+          "max_occupancy": 2,
+          "accurate_media": false
+        },
+        {
+          "room_name": "Superior Room Canal View",
+          "max_occupancy": 2,
+          "accurate_media": false
+        },
+        {
+          "room_name": "Executive Room (Lounge Access) , 1 King Bed",
+          "max_occupancy": 2,
+          "accurate_media": false
+        },
+        {
+          "room_name": "Family Suite , 1 King Bed",
+          "max_occupancy": 2,
+          "accurate_media": false
+        },
+        {
+          "room_name": "Executive Room Canal View With Lounge Access",
+          "max_occupancy": 2,
+          "accurate_media": false
+        },
+        {
+          "room_name": "Family Suite",
+          "max_occupancy": 2,
+          "accurate_media": false
+        },
+        {
+          "room_name": "Suite, 1 Bedroom (Lounge Access) , 1 King Bed",
+          "max_occupancy": 2,
+          "accurate_media": false
+        },
+        {
+          "room_name": "Executive Room View And Lounge Access",
+          "max_occupancy": 2,
+          "accurate_media": false
+        },
+        {
+          "room_name": "Executive Room View Amp; Lounge Access",
+          "max_occupancy": 2,
+          "accurate_media": false
+        },
+        {
+          "room_name": "One Bedroom Suite With Lounge Access",
+          "max_occupancy": 2,
+          "accurate_media": false
+        },
+        {
+          "room_name": "Suite, 1 Bedroom (Canal View Lounge Access) , 1 King Bed",
+          "max_occupancy": 2,
+          "accurate_media": false
+        },
+        {
+          "room_name": "One Bedroom Suite Canal View With Lounge Access",
+          "max_occupancy": 2,
+          "accurate_media": false
+        }
+      ],
+      "rooms_agoda": [
+        {
+          "agoda_room_id": 127842591,
+          "room_name": "Standard Room",
+          "max_occupancy": 4,
+          "beds": "2 beds",
+          "rate_plan_count": 24,
+          "images": [
+            "https://pix8.agoda.net/hotelImages/9455841/460390771/9826e75d4045f82fa3024b939ea8a14b.jpeg?ce=2&s=1024x768",
+            "https://pix8.agoda.net/property/10610372/330625909/e75398f5f23f5f5a670bab795fb3ad5b.jpeg?ce=0&s=1024x768",
+            "https://q-xx.bstatic.com/xdata/images/hotel/max1024x768/232850438.jpg?k=ca0a39b0b8d5a84405471229c7112e60bdae07f87e4708fea6cc1a7a69a0f5b3&o=",
+            "https://q-xx.bstatic.com/xdata/images/hotel/max1024x768/232269690.jpg?k=518b28562dce38abc314384a52b4cc2af2e71112a89dd0ef1564cb46b7ec170d&o=",
+            "https://pix8.agoda.net/hotelImages/9455841/355861572/e4ef2f7cd7b0bd0e847ed0453f793d74.jpg?ca=20&ce=0&s=1024x768",
+            "https://q-xx.bstatic.com/xdata/images/hotel/max1024x768/238794634.jpg?k=58b17ded26e212c0a34ae283330e3b961867bbee3b298190487c61c7848edcec&o=",
+            "https://pix8.agoda.net/hotelImages/9455841/355861572/f6ddf482c7e0bf4273315a6fa4338763.jpg?ca=20&ce=0&s=1024x768",
+            "https://q-xx.bstatic.com/xdata/images/hotel/max1024x768/726891060.jpg?k=f1fffe6753b5ea50f3b6d9a1a7061d5a57be3f18e8f75e013e80acb0b5019768&o=",
+            "https://pix8.agoda.net/hotelImages/9455841/460390771/d869a838f9e6e2cb313db9319a041ff9.jpg?ca=24&ce=0&s=1024x768",
+            "https://pix8.agoda.net/hotelImages/9455841/355861572/0fa0418ba5cb6deee4be780e546c28d5.jpg?ca=20&ce=0&s=1024x768",
+            "https://pix8.agoda.net/hotelImages/10610372/-1/565d71fca2e21bacdd4932770883325c.jpg?ca=9&ce=1&s=1024x768",
+            "https://pix8.agoda.net/hotelImages/9455841/116401427/9e5a67cba84cae24543879c3e3db9d41.jpg?ca=9&ce=1&s=1024x768",
+            "https://pix8.agoda.net/property/31522400/1370634536/7bb3e2f94932701be38d65b0c58a336c.jpeg?ce=3&s=1024x768",
+            "https://pix8.agoda.net/hotelImages/9455841/460390771/0a669a6623e67c1f5f1d44b9e307e066.jpg?ca=24&ce=0&s=1024x768",
+            "https://pix8.agoda.net/property/31522400/1370634536/8a7580f800921a92758980ceb433e969.jpeg?ce=3&s=1024x768",
+            "https://pix8.agoda.net/hotelImages/9455841/460390771/307d6d9eb89a5aa02adb7a114013bccd.jpeg?ce=2&s=1024x768",
+            "https://pix8.agoda.net/hotelImages/9455841/460390771/4642caf033022372ccd039dea111343b.jpg?ca=24&ce=0&s=1024x768",
+            "https://pix8.agoda.net/hotelImages/9455841/355861572/5c65bad03c50b5c2a330a41780405516.jpg?ca=20&ce=0&s=1024x768"
+          ],
+          "image_captions": [
+            "Guestroom",
+            "",
+            "",
+            "",
+            "Guestroom",
+            "",
+            "Guestroom",
+            "",
+            "Guestroom",
+            "Guestroom",
+            "Room plan",
+            "Guestroom",
+            "",
+            "Guestroom",
+            "",
+            "Guestroom",
+            "Guestroom",
+            "Guestroom"
+          ],
+          "thumbnail": "https://pix8.agoda.net/hotelImages/9455841/460390771/9826e75d4045f82fa3024b939ea8a14b.jpeg?ce=2&s=208x117&ar=16x9"
+        },
+        {
+          "agoda_room_id": 127842589,
+          "room_name": "Standard Room - Canal View",
+          "max_occupancy": 4,
+          "beds": "2 beds",
+          "rate_plan_count": 24,
+          "images": [
+            "https://pix8.agoda.net/property/31522400/1370634560/0daf1ae0185a860a9795c0d4595e2679.jpeg?ce=3&s=1024x768",
+            "https://pix8.agoda.net/property/31522400/1370634560/65eb11089cedd348ff748ec7db157881.jpeg?ce=3&s=1024x768",
+            "https://pix8.agoda.net/hotelImages/10610372/-1/cf07b4791ce1f331a31ca89920173e0e.jpg?ca=10&ce=1&s=1024x768",
+            "https://pix8.agoda.net/property/31522400/1370634560/52d7a3c85cdf57ee0c49caa648214014.jpeg?ce=3&s=1024x768",
+            "https://pix8.agoda.net/hotelImages/10610372/127842589/148083eb1c1b7709b78f77060f21c20a.jpeg?ce=0&s=1024x768",
+            "https://pix8.agoda.net/property/31522400/1370634560/64910d22a1187981218b0058cd360931.jpeg?ce=3&s=1024x768",
+            "https://q-xx.bstatic.com/xdata/images/hotel/max1024x768/232269690.jpg?k=518b28562dce38abc314384a52b4cc2af2e71112a89dd0ef1564cb46b7ec170d&o=",
+            "https://pix8.agoda.net/hotelImages/9455841/460390768/d9f8c3e092911d282463d771cb7e5bb3.jpeg?ce=2&s=1024x768",
+            "https://pix8.agoda.net/hotelImages/9455841/460390768/82144fec98ed1514cea88a29c6d2b00c.jpeg?ce=2&s=1024x768",
+            "https://pix8.agoda.net/hotelImages/9455841/460390768/63616824d2817a1f90153838125d78b4.jpg?ca=24&ce=0&s=1024x768",
+            "https://pix8.agoda.net/hotelImages/9455841/460390768/c8d887c1061dbc102621804af870149c.jpg?ca=24&ce=0&s=1024x768",
+            "https://pix8.agoda.net/property/31522400/1370634560/f6366f2897ed3a3c32d5ec6ed5086987.jpeg?ce=3&s=1024x768",
+            "https://q-xx.bstatic.com/xdata/images/hotel/max1024x768/726891060.jpg?k=f1fffe6753b5ea50f3b6d9a1a7061d5a57be3f18e8f75e013e80acb0b5019768&o=",
+            "https://pix8.agoda.net/hotelImages/9455841/460390768/d869a838f9e6e2cb313db9319a041ff9.jpg?ca=24&ce=0&s=1024x768",
+            "https://pix8.agoda.net/property/31522400/1370634560/5c0a5d52a92098562239c78dfa53b1e3.jpeg?ce=3&s=1024x768",
+            "https://pix8.agoda.net/hotelImages/9455841/355861569/9e5a67cba84cae24543879c3e3db9d41.jpg?ca=20&ce=0&s=1024x768",
+            "https://pix8.agoda.net/hotelImages/9455841/460390768/17ed12066d06996fdc07a35e166694de.jpg?ca=24&ce=0&s=1024x768",
+            "https://q-xx.bstatic.com/xdata/images/hotel/max1024x768/232267102.jpg?k=2ff22f7f2d292b787e180312b1296f3138f8e1a0e05119312ebabe89c95e41f0&o="
+          ],
+          "image_captions": [
+            "",
+            "",
+            "Bathroom",
+            "",
+            "Guestroom",
+            "",
+            "",
+            "Guestroom",
+            "Guestroom",
+            "Guestroom",
+            "Guestroom",
+            "",
+            "",
+            "Guestroom",
+            "",
+            "Guestroom",
+            "Guestroom",
+            ""
+          ],
+          "thumbnail": "https://pix8.agoda.net/property/31522400/1370634560/0daf1ae0185a860a9795c0d4595e2679.jpeg?ce=3&s=208x117&ar=16x9"
+        },
+        {
+          "agoda_room_id": 127842590,
+          "room_name": "Superior Room",
+          "max_occupancy": 4,
+          "beds": "2 beds",
+          "rate_plan_count": 15,
+          "images": [
+            "https://pix8.agoda.net/property/31522400/1370634564/0daf1ae0185a860a9795c0d4595e2679.jpeg?ce=3&s=1024x768",
+            "https://pix8.agoda.net/hotelImages/10610372/-1/46468a5dcdc5ade51bc39bfcfb50586d.jpg?ca=9&ce=1&s=1024x768",
+            "https://pix8.agoda.net/hotelImages/9455841/460390761/c2c4c714620b797f44450b3cdfacf43d.jpeg?ce=2&s=1024x768",
+            "https://pix8.agoda.net/hotelImages/9455841/460390761/2160fa4b4aba872a0fcf636577c2dfd6.jpeg?ce=2&s=1024x768",
+            "https://pix8.agoda.net/hotelImages/9455841/460390761/9826e75d4045f82fa3024b939ea8a14b.jpeg?ce=2&s=1024x768",
+            "https://q-xx.bstatic.com/xdata/images/hotel/max1024x768/235358909.jpg?k=bbfb38c7c67f8285bd698406010f91573f2fdf97b71371b5ceadf761104bb482&o=",
+            "https://q-xx.bstatic.com/xdata/images/hotel/max1024x768/232269690.jpg?k=518b28562dce38abc314384a52b4cc2af2e71112a89dd0ef1564cb46b7ec170d&o=",
+            "https://pix8.agoda.net/hotelImages/9455841/460390761/f6a7c2f792104e81bef67a17d3bb309b.jpeg?ce=2&s=1024x768",
+            "https://pix8.agoda.net/hotelImages/9455841/199761558/977b4510837b717d48953bb757397a06.jpg?ca=12&ce=1&s=1024x768",
+            "https://pix8.agoda.net/property/31522400/1370634564/69945d1156db7741cd873aaa83e9cb78.jpeg?ce=3&s=1024x768",
+            "https://q-xx.bstatic.com/xdata/images/hotel/max1024x768/232849728.jpg?k=e0232f1ee32b23e78e24dcca2a56aaa5e74fbcb4f948270ace17201296b0445c&o=",
+            "https://q-xx.bstatic.com/xdata/images/hotel/max1024x768/232850915.jpg?k=865af2ba8bc35bfc1532438c27b8379506b91f36425a630ae5db46111cfb17b2&o=",
+            "https://pix8.agoda.net/hotelImages/10610372/127842590/e331c0f44c6a67856541d02b073aaebe.jpeg?ce=0&s=1024x768",
+            "https://q-xx.bstatic.com/xdata/images/hotel/max1024x768/232267102.jpg?k=2ff22f7f2d292b787e180312b1296f3138f8e1a0e05119312ebabe89c95e41f0&o=",
+            "https://pix8.agoda.net/hotelImages/10610372/127842590/4f90e44e3cca23200e935caa792e6289.jpeg?ce=0&s=1024x768",
+            "https://pix8.agoda.net/hotelImages/9455841/460390761/b6ca5b1623da24dfc6de24519e4f2cad.jpeg?ce=2&s=1024x768",
+            "https://q-xx.bstatic.com/xdata/images/hotel/max1024x768/235361334.jpg?k=9461bfa7b6d96b175d2b47415e36fd09cd54955254010615701ba396f7f411d9&o=",
+            "https://q-xx.bstatic.com/xdata/images/hotel/max1024x768/235358771.jpg?k=571622684d36efd98daad32efb4e88c0d866041ae48ef5f1eb6b7c3d436700a8&o="
+          ],
+          "image_captions": [
+            "",
+            "View",
+            "Guestroom",
+            "Guestroom",
+            "Guestroom",
+            "",
+            "",
+            "Guestroom",
+            "Guestroom",
+            "",
+            "",
+            "",
+            "Bed",
+            "",
+            "Room plan",
+            "Guestroom",
+            "",
+            ""
+          ],
+          "thumbnail": "https://pix8.agoda.net/property/31522400/1370634564/0daf1ae0185a860a9795c0d4595e2679.jpeg?ce=3&s=208x117&ar=16x9"
+        },
+        {
+          "agoda_room_id": 127842588,
+          "room_name": "Superior Room - Canal View",
+          "max_occupancy": 4,
+          "beds": "1 bed",
+          "rate_plan_count": 24,
+          "images": [
+            "https://q-xx.bstatic.com/xdata/images/hotel/max1024x768/232269022.jpg?k=ebed178b711bd283e3e08da3ea32a56b6fb15459b50659eb9db03c4b745c4589&o=",
+            "https://pix8.agoda.net/hotelImages/9455841/460390769/79ed900f06e4bdef6deae1022e381f8b.jpeg?ce=2&s=1024x768",
+            "https://pix8.agoda.net/hotelImages/9455841/460390769/c2c4c714620b797f44450b3cdfacf43d.jpeg?ce=2&s=1024x768",
+            "https://q-xx.bstatic.com/xdata/images/hotel/max1024x768/235358909.jpg?k=bbfb38c7c67f8285bd698406010f91573f2fdf97b71371b5ceadf761104bb482&o=",
+            "https://q-xx.bstatic.com/xdata/images/hotel/max1024x768/726890970.jpg?k=770af792f90353fe67d2287c40da55cd96af95bc8223bce3e01b32192d38cdb6&o=",
+            "https://q-xx.bstatic.com/xdata/images/hotel/max1024x768/232269690.jpg?k=518b28562dce38abc314384a52b4cc2af2e71112a89dd0ef1564cb46b7ec170d&o=",
+            "https://pix8.agoda.net/hotelImages/9455841/460390769/f6a7c2f792104e81bef67a17d3bb309b.jpeg?ce=2&s=1024x768",
+            "https://pix8.agoda.net/hotelImages/9455841/355861570/977b4510837b717d48953bb757397a06.jpg?ca=21&ce=0&s=1024x768",
+            "https://pix8.agoda.net/hotelImages/9455841/460390769/e4ef2f7cd7b0bd0e847ed0453f793d74.jpg?ce=0&s=1024x768",
+            "https://pix8.agoda.net/hotelImages/9455841/460390769/a80e5717a7554f5e266df4c92d03d8ac.jpeg?ce=2&s=1024x768",
+            "https://q-xx.bstatic.com/xdata/images/hotel/max1024x768/232849728.jpg?k=e0232f1ee32b23e78e24dcca2a56aaa5e74fbcb4f948270ace17201296b0445c&o=",
+            "https://pix8.agoda.net/hotelImages/9455841/460390769/0fa0418ba5cb6deee4be780e546c28d5.jpeg?ce=2&s=1024x768",
+            "https://q-xx.bstatic.com/xdata/images/hotel/max1024x768/235361668.jpg?k=65d7697d0578258dc534e6943a118580add95fb97a506f8a37455eceb54a802f&o=",
+            "https://q-xx.bstatic.com/xdata/images/hotel/max1024x768/232267102.jpg?k=2ff22f7f2d292b787e180312b1296f3138f8e1a0e05119312ebabe89c95e41f0&o=",
+            "https://pix8.agoda.net/hotelImages/9455841/460390769/5c65bad03c50b5c2a330a41780405516.jpg?ce=0&s=1024x768",
+            "https://pix8.agoda.net/hotelImages/10610372/-1/bb58728511afec7e51c8d9ce88fa8276.jpg?ca=9&ce=1&s=1024x768",
+            "https://pix8.agoda.net/hotelImages/10610372/-1/c921011f2720ade00f18a5b645c7b81f.jpg?ca=10&ce=1&s=1024x768",
+            "https://q-xx.bstatic.com/xdata/images/hotel/max1024x768/238795412.jpg?k=7d712f5422604a83c6f75855df8aa0572454b8ad99e46a5a79ce5d12f4b380bf&o="
+          ],
+          "image_captions": [
+            "",
+            "Guestroom",
+            "Guestroom",
+            "",
+            "",
+            "",
+            "Guestroom",
+            "Guestroom",
+            "Guestroom",
+            "Guestroom",
+            "",
+            "Guestroom",
+            "",
+            "",
+            "Guestroom",
+            "Room plan",
+            "Bathroom",
+            ""
+          ],
+          "thumbnail": "https://q-xx.bstatic.com/xdata/images/hotel/max300/232269022.jpg?k=ebed178b711bd283e3e08da3ea32a56b6fb15459b50659eb9db03c4b745c4589&o="
+        },
+        {
+          "agoda_room_id": 127842594,
+          "room_name": "EXECUTIVE ROOM - VIEW & LOUNGE ACCESS",
+          "max_occupancy": 4,
+          "beds": "1 bed",
+          "rate_plan_count": 22,
+          "images": [
+            "https://pix8.agoda.net/hotelImages/9455841/199761560/45407e0b35402ac3b3cb7527be8c5c3c.jpg?ca=17&ce=1&s=1024x768",
+            "https://q-xx.bstatic.com/xdata/images/hotel/max1024x768/232269022.jpg?k=ebed178b711bd283e3e08da3ea32a56b6fb15459b50659eb9db03c4b745c4589&o=",
+            "https://pix8.agoda.net/hotelImages/9455841/460390765/affb49ca9a52b339bb879ba860e998de.jpeg?ce=2&s=1024x768",
+            "https://pix8.agoda.net/hotelImages/10610372/-1/2d4956de01ad9556a1089035bab2db5f.jpg?ca=10&ce=1&s=1024x768",
+            "https://pix8.agoda.net/hotelImages/9455841/199761560/92fdcb17cf9bdf798ca001c8f601e98b.jpg?ca=17&ce=1&s=1024x768",
+            "https://q-xx.bstatic.com/xdata/images/hotel/max1024x768/232269690.jpg?k=518b28562dce38abc314384a52b4cc2af2e71112a89dd0ef1564cb46b7ec170d&o=",
+            "https://pix8.agoda.net/hotelImages/9455841/199761560/c7eb1d5c7f78a7ee31ba8cbdf45f71d1.jpg?ca=17&ce=1&s=1024x768",
+            "https://pix8.agoda.net/hotelImages/9455841/460390765/9f7917b04e0f29f6d8fcf481113a2a88.jpeg?ce=2&s=1024x768",
+            "https://pix8.agoda.net/hotelImages/9455841/460390765/ec66f9be42d448598aa15b05cf5e6052.jpg?ca=24&ce=0&s=1024x768",
+            "https://q-xx.bstatic.com/xdata/images/hotel/max1024x768/238794634.jpg?k=58b17ded26e212c0a34ae283330e3b961867bbee3b298190487c61c7848edcec&o=",
+            "https://pix8.agoda.net/hotelImages/9455841/460390765/0fa0418ba5cb6deee4be780e546c28d5.jpeg?ce=2&s=1024x768",
+            "https://q-xx.bstatic.com/xdata/images/hotel/max1024x768/235361668.jpg?k=65d7697d0578258dc534e6943a118580add95fb97a506f8a37455eceb54a802f&o=",
+            "https://q-xx.bstatic.com/xdata/images/hotel/max1024x768/232850909.jpg?k=4a2a409a751912c75acffd5e0eaac3a7e804a4f26daabbd3001e1fab42ebc9eb&o=",
+            "https://pix8.agoda.net/hotelImages/9455841/460390765/cd400283e68ea5efd77ebf43c9ed8c76.jpg?ca=24&ce=0&s=1024x768",
+            "https://q-xx.bstatic.com/xdata/images/hotel/max1024x768/235361334.jpg?k=9461bfa7b6d96b175d2b47415e36fd09cd54955254010615701ba396f7f411d9&o=",
+            "https://q-xx.bstatic.com/xdata/images/hotel/max1024x768/238795412.jpg?k=7d712f5422604a83c6f75855df8aa0572454b8ad99e46a5a79ce5d12f4b380bf&o=",
+            "https://q-xx.bstatic.com/xdata/images/hotel/max1024x768/232850438.jpg?k=ca0a39b0b8d5a84405471229c7112e60bdae07f87e4708fea6cc1a7a69a0f5b3&o=",
+            "https://pix8.agoda.net/hotelImages/9455841/199761560/e3b0ae3afce4ce3b04f8eb8289e3506c.jpg?ca=20&ce=1&s=1024x768"
+          ],
+          "image_captions": [
+            "Guestroom",
+            "",
+            "Guestroom",
+            "View",
+            "Guestroom",
+            "",
+            "Guestroom",
+            "Guestroom",
+            "Guestroom",
+            "",
+            "Guestroom",
+            "",
+            "",
+            "Guestroom",
+            "",
+            "",
+            "",
+            "Guestroom"
+          ],
+          "thumbnail": "https://pix8.agoda.net/hotelImages/9455841/199761560/45407e0b35402ac3b3cb7527be8c5c3c.jpg?ca=17&ce=1&s=208x117&ar=16x9"
+        },
+        {
+          "agoda_room_id": 127842587,
+          "room_name": "Family Suite",
+          "max_occupancy": 5,
+          "beds": "1 bed",
+          "rate_plan_count": 24,
+          "images": [
+            "https://q-xx.bstatic.com/xdata/images/hotel/max1024x768/235357184.jpg?k=ad391ea8a6798f30455d31879efbee7430ff207fe7e151d0dcf24abc8e975f4c&o=",
+            "https://pix8.agoda.net/hotelImages/10610372/-1/a22b84924bb44eac08ac81422f8bbb1b.jpg?ca=9&ce=1&s=1024x768",
+            "https://q-xx.bstatic.com/xdata/images/hotel/max1024x768/232850438.jpg?k=ca0a39b0b8d5a84405471229c7112e60bdae07f87e4708fea6cc1a7a69a0f5b3&o=",
+            "https://q-xx.bstatic.com/xdata/images/hotel/max1024x768/232269690.jpg?k=518b28562dce38abc314384a52b4cc2af2e71112a89dd0ef1564cb46b7ec170d&o=",
+            "https://pix8.agoda.net/hotelImages/9455841/460390772/23e1d810f16163c552590a302bf97ae1.jpeg?ce=2&s=1024x768",
+            "https://pix8.agoda.net/hotelImages/9455841/460390772/965c5f8b6f7970adb7de7b871ab395eb.jpeg?ce=2&s=1024x768",
+            "https://pix8.agoda.net/hotelImages/10610372/-1/b45ce0a294e323f62c61e96ac4caacbb.jpg?ca=9&ce=1&s=1024x768",
+            "https://pix8.agoda.net/hotelImages/9455841/460390772/b4d086f713decabdd961e5c8bcdf67bd.jpeg?ce=2&s=1024x768",
+            "https://pix8.agoda.net/hotelImages/9455841/460390772/6adff4d12d5468a9094b164cce3353a0.jpeg?ce=2&s=1024x768",
+            "https://pix8.agoda.net/hotelImages/9455841/460390772/7995397f473e4173982a2e01f4217665.jpeg?ce=2&s=1024x768",
+            "https://q-xx.bstatic.com/xdata/images/hotel/max1024x768/232269320.jpg?k=8138442e152c0623433b9266205ce0bfca3da26b7eb985bf1f91d3e77fdae248&o=",
+            "https://q-xx.bstatic.com/xdata/images/hotel/max1024x768/235361668.jpg?k=65d7697d0578258dc534e6943a118580add95fb97a506f8a37455eceb54a802f&o=",
+            "https://pix8.agoda.net/property/56147121/872949708/6946afb8deac438d78d9440638d758ff.jpeg?ce=0&s=1024x768",
+            "https://pix8.agoda.net/hotelImages/9455841/460390772/f8f870cec9a5ec8447dfdee908e52e0b.jpg?ca=24&ce=0&s=1024x768",
+            "https://q-xx.bstatic.com/xdata/images/hotel/max1024x768/238795412.jpg?k=7d712f5422604a83c6f75855df8aa0572454b8ad99e46a5a79ce5d12f4b380bf&o=",
+            "https://pix8.agoda.net/hotelImages/10610372/-1/7b89ccecdae83d0a027f76680a580eb1.jpg?ca=9&ce=1&s=1024x768",
+            "https://pix8.agoda.net/hotelImages/9455841/460390772/e3a63c659233af33477d6ee9ec5b3cc6.jpg?ca=24&ce=0&s=1024x768",
+            "https://pix8.agoda.net/hotelImages/9455841/355861573/5f0d4515c389d7f582d91c3f2053067e.jpg?ca=20&ce=0&s=1024x768"
+          ],
+          "image_captions": [
+            "",
+            "View",
+            "",
+            "",
+            "Suite room",
+            "Suite room",
+            "Bed",
+            "Suite room",
+            "Suite room",
+            "Suite room",
+            "",
+            "",
+            "",
+            "Suite room",
+            "",
+            "Bathroom",
+            "Suite room",
+            "Guestroom"
+          ],
+          "thumbnail": "https://q-xx.bstatic.com/xdata/images/hotel/max300/235357184.jpg?k=ad391ea8a6798f30455d31879efbee7430ff207fe7e151d0dcf24abc8e975f4c&o="
+        },
+        {
+          "agoda_room_id": 127842592,
+          "room_name": "Suite - One Bedroom & Lounge Access",
+          "max_occupancy": 5,
+          "beds": "1 bed",
+          "rate_plan_count": 22,
+          "images": [
+            "https://q-xx.bstatic.com/xdata/images/hotel/max1024x768/235357184.jpg?k=ad391ea8a6798f30455d31879efbee7430ff207fe7e151d0dcf24abc8e975f4c&o=",
+            "https://pix8.agoda.net/property/10610372/872949694/5d3016f23c8dd9640fd072dddf72e2be.jpeg?ce=0&s=1024x768",
+            "https://pix8.agoda.net/hotelImages/9455841/470585891/05946b7678e5e0ce10929a2312be192b.jpeg?ce=2&s=1024x768",
+            "https://q-xx.bstatic.com/xdata/images/hotel/max1024x768/232269690.jpg?k=518b28562dce38abc314384a52b4cc2af2e71112a89dd0ef1564cb46b7ec170d&o=",
+            "https://pix8.agoda.net/hotelImages/9455841/470585891/cd9ee78d59cb35d868d351a55a993faf.jpeg?ce=2&s=1024x768",
+            "https://pix8.agoda.net/hotelImages/9455841/199761557/98736d3e15436774714a9ac85c64c507.jpg?ca=12&ce=1&s=1024x768",
+            "https://pix8.agoda.net/hotelImages/9455841/470585891/555ca136fed1b07cb50c7555100d765c.jpg?ca=25&ce=0&s=1024x768",
+            "https://q-xx.bstatic.com/xdata/images/hotel/max1024x768/232269495.jpg?k=55bcfa91d4c75d00a5de9f4efe25600d732692a09f931d809cbe300df3ca7be6&o=",
+            "https://pix8.agoda.net/hotelImages/10610372/-1/bb29b4e26be3247b859857c758164b20.jpg?ca=10&ce=1&s=1024x768",
+            "https://q-xx.bstatic.com/xdata/images/hotel/max1024x768/235361668.jpg?k=65d7697d0578258dc534e6943a118580add95fb97a506f8a37455eceb54a802f&o=",
+            "https://q-xx.bstatic.com/xdata/images/hotel/max1024x768/232850909.jpg?k=4a2a409a751912c75acffd5e0eaac3a7e804a4f26daabbd3001e1fab42ebc9eb&o=",
+            "https://pix8.agoda.net/hotelImages/9455841/470585891/1ed6df2eb3ca0fd509ae84f369e76c1e.jpeg?ce=2&s=1024x768",
+            "https://pix8.agoda.net/hotelImages/9455841/470585891/9d3f7a72fcc34f6c7f334bf6ea575e49.jpeg?ce=2&s=1024x768",
+            "https://q-xx.bstatic.com/xdata/images/hotel/max1024x768/235361334.jpg?k=9461bfa7b6d96b175d2b47415e36fd09cd54955254010615701ba396f7f411d9&o=",
+            "https://q-xx.bstatic.com/xdata/images/hotel/max1024x768/726891043.jpg?k=350f6a93458aace78e9374e8f903de5da1b265a30aa575091e1a7b591fbe1595&o=",
+            "https://q-xx.bstatic.com/xdata/images/hotel/max1024x768/238795412.jpg?k=7d712f5422604a83c6f75855df8aa0572454b8ad99e46a5a79ce5d12f4b380bf&o=",
+            "https://pix8.agoda.net/hotelImages/9455841/460390763/f6c4da62c6090b2252468b0898c280a5.jpg?ca=24&ce=0&s=1024x768",
+            "https://q-xx.bstatic.com/xdata/images/hotel/max1024x768/232850438.jpg?k=ca0a39b0b8d5a84405471229c7112e60bdae07f87e4708fea6cc1a7a69a0f5b3&o="
+          ],
+          "image_captions": [
+            "",
+            "",
+            "Suite room",
+            "",
+            "Suite room",
+            "Suite room",
+            "Suite room",
+            "",
+            "View",
+            "",
+            "",
+            "Suite room",
+            "Suite room",
+            "",
+            "",
+            "",
+            "Suite room",
+            ""
+          ],
+          "thumbnail": "https://q-xx.bstatic.com/xdata/images/hotel/max300/235357184.jpg?k=ad391ea8a6798f30455d31879efbee7430ff207fe7e151d0dcf24abc8e975f4c&o="
+        },
+        {
+          "agoda_room_id": 127842593,
+          "room_name": "Suite - 1 bedroom - View & Lounge Access",
+          "max_occupancy": 5,
+          "beds": "1 bed",
+          "rate_plan_count": 22,
+          "images": [
+            "https://pix8.agoda.net/hotelImages/9455841/460390767/0afc2e39c8af9de72e559ca8747fbf88.jpeg?ce=2&s=1024x768",
+            "https://pix8.agoda.net/hotelImages/9455841/199761556/ff48a2325082ee0d99e10601caa741dd.jpg?ca=12&ce=1&s=1024x768",
+            "https://pix8.agoda.net/hotelImages/9455841/460390767/05946b7678e5e0ce10929a2312be192b.jpeg?ce=2&s=1024x768",
+            "https://pix8.agoda.net/hotelImages/9455841/199761556/462b344e87402333274b9a46ff7224b4.jpg?ca=17&ce=1&s=1024x768",
+            "https://q-xx.bstatic.com/xdata/images/hotel/max1024x768/232269690.jpg?k=518b28562dce38abc314384a52b4cc2af2e71112a89dd0ef1564cb46b7ec170d&o=",
+            "https://pix8.agoda.net/hotelImages/9455841/460390767/cd9ee78d59cb35d868d351a55a993faf.jpeg?ce=2&s=1024x768",
+            "https://pix8.agoda.net/hotelImages/9455841/355861568/98736d3e15436774714a9ac85c64c507.jpg?ca=20&ce=0&s=1024x768",
+            "https://pix8.agoda.net/hotelImages/9455841/199761556/555ca136fed1b07cb50c7555100d765c.jpg?ca=17&ce=1&s=1024x768",
+            "https://q-xx.bstatic.com/xdata/images/hotel/max1024x768/232269495.jpg?k=55bcfa91d4c75d00a5de9f4efe25600d732692a09f931d809cbe300df3ca7be6&o=",
+            "https://pix8.agoda.net/hotelImages/9455841/460390767/e210e62e4c0532ea3b81dc85effc8abb.jpeg?ce=2&s=1024x768",
+            "https://pix8.agoda.net/hotelImages/9455841/460390767/d4d1ff385b65307d3e18575c937f3026.jpeg?ce=2&s=1024x768",
+            "https://q-xx.bstatic.com/xdata/images/hotel/max1024x768/232269320.jpg?k=8138442e152c0623433b9266205ce0bfca3da26b7eb985bf1f91d3e77fdae248&o=",
+            "https://q-xx.bstatic.com/xdata/images/hotel/max1024x768/235361668.jpg?k=65d7697d0578258dc534e6943a118580add95fb97a506f8a37455eceb54a802f&o=",
+            "https://q-xx.bstatic.com/xdata/images/hotel/max1024x768/232850909.jpg?k=4a2a409a751912c75acffd5e0eaac3a7e804a4f26daabbd3001e1fab42ebc9eb&o=",
+            "https://pix8.agoda.net/hotelImages/9455841/460390767/1ed6df2eb3ca0fd509ae84f369e76c1e.jpg?ca=24&ce=0&s=1024x768",
+            "https://pix8.agoda.net/hotelImages/9455841/460390767/9d3f7a72fcc34f6c7f334bf6ea575e49.jpeg?ce=2&s=1024x768",
+            "https://q-xx.bstatic.com/xdata/images/hotel/max1024x768/235361334.jpg?k=9461bfa7b6d96b175d2b47415e36fd09cd54955254010615701ba396f7f411d9&o=",
+            "https://q-xx.bstatic.com/xdata/images/hotel/max1024x768/726891043.jpg?k=350f6a93458aace78e9374e8f903de5da1b265a30aa575091e1a7b591fbe1595&o="
+          ],
+          "image_captions": [
+            "Suite room",
+            "Suite room",
+            "Suite room",
+            "Suite room",
+            "",
+            "Suite room",
+            "Guestroom",
+            "Suite room",
+            "",
+            "Suite room",
+            "Suite room",
+            "",
+            "",
+            "",
+            "Suite room",
+            "Suite room",
+            "",
+            ""
+          ],
+          "thumbnail": "https://pix8.agoda.net/hotelImages/9455841/460390767/0afc2e39c8af9de72e559ca8747fbf88.jpeg?ce=2&s=208x117&ar=16x9"
+        }
+      ]
+    }
+  ]
+}

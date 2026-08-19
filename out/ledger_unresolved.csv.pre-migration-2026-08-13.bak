@@ -1,0 +1,80 @@
+v2_common_hotel_id,city_id,slug,name,run_id,reason,detail,last_attempted_at
+1550,1280,hi-guests-vacation-homes-saba-2,hi guests vacation homes saba 2,20260806-155850,no_agoda_match,no candidate above name threshold,2026-08-06T16:12:15
+1340,1280,staybridge-suites-dubai-internet-city-an-ihg-hotel,"staybridge suites dubai internet city, an ihg hotel",20260806-155850,no_agoda_match,rejected 'Staybridge Suites Malaga By IHG' name=81% strict=59% dist=5738.82km same_city=False,2026-08-06T16:12:22
+1297,1280,frank-porter-sadaf-1,frank porter - sadaf 1,20260806-155850,no_agoda_match,"rejected 'Frank Porter - Al Samar': individually-listed accommodation (Apartment/Flat), not the hotel",2026-08-06T16:12:32
+853,1280,al-manar-hotel-apartments-549,al manar hotel apartments,20260806-155850,error,"OperationalError: (2013, 'Lost connection to MySQL server during query ([Errno 54] Connection reset by peer)')",2026-08-06T16:13:18
+650,1280,aravi-hotel-dubai-519,aravi hotel dubai,20260806-155850,no_agoda_match,no candidate above name threshold,2026-08-06T16:13:20
+8433,24,casa-del-parque,casa del parque,20260806-164144,no_agoda_match,rejected 'Hotel Casa del Parque by AHS' name=100% strict=70% dist=6782.30km same_city=False,2026-08-06T16:41:53
+8279,24,hospedaje-esmeralda,hospedaje esmeralda,20260806-164144,no_agoda_match,"rejected 'Hospedaje ESMERALDA': individually-listed accommodation (Apartment/Flat), not the hotel",2026-08-06T16:44:27
+8265,24,viva-la-pepa-cabanas-al-rio,viva la pepa cabanas al rio.,20260806-164144,no_agoda_match,no candidate above name threshold,2026-08-06T16:44:31
+7517,24,hotel-conte,hotel conte,20260806-164144,no_agoda_match,rejected 'Hotel Conte' name=100% strict=100% dist=11169.34km same_city=False,2026-08-06T16:44:38
+8249,24,villa-ocampo,villa ocampo,20260806-164144,no_agoda_match,"rejected 'Casa con parque, 4 habitaciones, zona Villa Victoria Ocampo': individually-listed accommodation (Apartment/Flat), not the hotel",2026-08-06T16:45:58
+8240,24,gardel-flats,gardel flats,20260806-164144,no_rooms_any_date,"agoda source=http, bookme rooms=0",2026-08-06T16:46:22
+7030,24,alfa-hotel,alfa hotel,20260806-164144,no_agoda_match,rejected 'ALFA HOTEL' name=100% strict=100% dist=11679.29km same_city=False,2026-08-06T16:46:30
+7227,24,rochester-m,rochester m,20260806-172509,no_rooms_any_date,"agoda source=http, bookme rooms=0",2026-08-06T17:34:06
+7166,24,hotel-internacional,hotel internacional,20260806-172509,no_agoda_match,rejected 'Hotel Internacional Guarulhos' name=100% strict=79% dist=1685.92km same_city=False,2026-08-06T17:34:15
+8575,24,aires-de-rio,aires de río,20260806-172509,no_agoda_match,"rejected 'Aires del Rio Apart': individually-listed accommodation (Apartment/Flat), not the hotel",2026-08-06T17:36:34
+7413,24,blue-soho-hotel,blue soho hotel,20260806-172509,no_rooms_any_date,"agoda source=http, bookme rooms=0",2026-08-06T17:38:19
+7890,24,meeting-point-hotel,meeting point hotel,20260806-172509,no_rooms_any_date,"agoda source=http, bookme rooms=0",2026-08-06T17:38:49
+56888,9289,urban-flats-vienna-city-center,urban flats vienna city center,20260811-013135,no_agoda_match,"rejected 'Urban Flats Vienna City Center': individually-listed accommodation (Apartment/Flat), not the hotel",2026-08-11T01:43:46
+57349,9289,era-apartments-am-prater-2,era apartments am prater 2,20260811-013135,no_agoda_match,"rejected 'Apartments ERA': individually-listed accommodation (Apartment/Flat), not the hotel",2026-08-11T01:43:52
+88489,1560,diyar-al-huda-hotel,diyar al huda hotel,20260811-014455,no_rooms_any_date,"agoda source=http, bookme rooms=0",2026-08-11T01:55:15
+86321,1560,company-ejiad-albaet-hotel,company ejiad albaet hotel,20260811-014455,no_agoda_match,no agoda suggestion,2026-08-11T01:55:18
+88415,1560,mohammad-abdullah-aljammaz-establishment-hotel,mohammad abdullah aljammaz establishment hotel,20260811-014455,no_agoda_match,no agoda suggestion,2026-08-11T01:55:21
+88184,1560,almira-al-mithali-estab-for-maintenance-cleaning,almira al mithali estab for maintenance & cleaning,20260811-014455,no_agoda_match,no candidate above name threshold,2026-08-11T01:55:24
+88030,1560,ghazi-jouda-bati-hostel-for-tourist-lodges,ghazi jouda bati hostel for tourist lodges,20260811-014455,no_agoda_match,no agoda suggestion,2026-08-11T01:55:27
+58513,5138,fountain-square-balconies-in-old-town,fountain square balconies in old town,20260811-015527,no_agoda_match,no candidate above name threshold,2026-08-11T02:03:23
+58562,5138,apartment-with-sauna,apartment with sauna,20260811-015527,no_agoda_match,"rejected 'Cozy Apartment with Sauna': individually-listed accommodation (Apartment/Flat), not the hotel",2026-08-11T02:03:32
+58490,5138,boulevard-apartment-with-sea-view,boulevard apartment with sea view,20260811-015527,no_agoda_match,"rejected 'Tanger Boulevard - Stylish & Elegant Apartment with Sea View - Amazing Location!': individually-listed accommodation (Apartment/Flat), not the hotel",2026-08-11T02:03:41
+58534,5138,family-luxury-apartment,family luxury apartment,20260811-015527,no_agoda_match,rejected 'Luxury Family Apartment near centaurus park blue area' name=100% strict=61% dist=2178.14km same_city=False,2026-08-11T02:04:16
+59400,4752,hotel-swiss-garden-908,hotel swiss garden,20260811-020416,no_agoda_match,rejected 'Swiss-Garden Hotel Melaka' name=100% strict=84% dist=2717.89km same_city=False,2026-08-11T02:14:51
+59552,4752,hotel-purbani-int-ltd,hotel purbani int. ltd.,20260811-020416,no_agoda_match,no candidate above name threshold,2026-08-11T02:14:55
+16854,9177,apartment-by-opera,apartment by opera,20260811-021550,no_agoda_match,"rejected 'RIS Opera Apartments Yerevan': individually-listed accommodation (Apartment/Flat), not the hotel",2026-08-11T02:21:19
+16881,9177,gallery-apartment-3,gallery apartment 3,20260811-021550,no_agoda_match,"rejected 'Gallery Apartment 3': individually-listed accommodation (Apartment/Flat), not the hotel",2026-08-11T02:21:28
+78766,13413,leblon-2-quartos-500-metros-da-praia,leblon 2 quartos 500 metros da praia,20260811-022313,no_agoda_match,no candidate above name threshold,2026-08-11T02:24:54
+2303,9674,arvi,arvi,20260811-022603,no_agoda_match,no agoda suggestion,2026-08-11T02:26:50
+2544,9674,oda-hotel-tirana,oda hotel tirana,20260811-022603,no_rooms_any_date,"agoda source=http, bookme rooms=0",2026-08-11T02:27:16
+2642,9674,all-stars-hostel-in-tirane,all stars hostel in tirane,20260811-022603,no_agoda_match,no agoda suggestion,2026-08-11T02:27:21
+2897,9674,lake-house-tirana,lake house tirana,20260811-022603,no_agoda_match,rejected 'LAKE HOUSE Naka Cave' name=76% strict=70% dist=8227.17km same_city=False,2026-08-11T02:27:28
+68440,7795,little-paradise-915,little paradise,20260811-022751,no_agoda_match,rejected 'Little Paradise Haad Rin Koh Phangan' name=100% strict=59% dist=8595.21km same_city=False,2026-08-11T02:32:43
+68287,7795,apartment-ready-4-sarajevo,apartment ready 4 sarajevo,20260811-022751,no_agoda_match,"rejected 'Ready Apartment': individually-listed accommodation (Apartment/Flat), not the hotel",2026-08-11T02:32:53
+68438,7795,apartment-onyx,apartment onyx,20260811-022751,no_agoda_match,rejected 'The Onyx Apartment Hotel by NEWMARK' name=100% strict=57% dist=8649.26km same_city=False,2026-08-11T02:33:02
+68179,7795,alem-hotel,alem hotel,20260811-022751,no_agoda_match,rejected 'ALEM Hotel' name=100% strict=100% dist=2181.11km same_city=False,2026-08-11T02:33:04
+68589,7795,apartmant-jacuzzi,apartmant jacuzzi,20260811-022751,no_agoda_match,"rejected 'Apartmant Shine Luxury Privat Pool & Jacuzzi': individually-listed accommodation (Apartment/Flat), not the hotel",2026-08-11T02:33:09
+12588,560,entre-fincas,entre fincas,20260811-023309,no_agoda_match,"rejected 'Entre Fincas': individually-listed accommodation (Country house), not the hotel",2026-08-11T02:34:17
+12273,560,apart-hotel-murano,apart hotel murano,20260811-023309,no_agoda_match,"rejected 'Dizztravel Apart Murano Centro Exclusivo apto 2701': individually-listed accommodation (Apartment/Flat), not the hotel",2026-08-11T02:34:23
+12241,560,hotel-san-martin-551,hotel san martín,20260811-023309,no_agoda_match,no agoda suggestion,2026-08-11T02:34:28
+12211,560,backpackers-travel-hotel,backpackers travel hotel,20260811-023309,no_agoda_match,rejected 'Travel&Joy backpackers' name=86% strict=80% dist=12307.06km same_city=False,2026-08-11T02:34:40
+89371,14118,33-long-island,33 long island,20260811-023440,no_agoda_match,rejected 'Red Roof PLUS+ Long Island - Garden City' name=88% strict=47% dist=13272.45km same_city=False,2026-08-11T02:39:51
+89295,14118,5-sable-drive,5 sable drive,20260811-023440,no_agoda_match,no candidate above name threshold,2026-08-11T02:39:56
+89401,14118,driftwood-4-with-invertor,driftwood 4 with invertor,20260811-023440,no_agoda_match,"rejected 'Driftwood 4': individually-listed accommodation (Apartment/Flat), not the hotel",2026-08-11T02:39:59
+89373,14118,chakas-cove-8,chakas cove 8,20260811-023440,no_agoda_match,"rejected 'Chakas Cove': individually-listed accommodation (Apartment/Flat), not the hotel",2026-08-11T02:40:08
+89290,14118,long-island-42,long island 42,20260811-023440,no_agoda_match,"rejected 'Long Island 42': individually-listed accommodation (Apartment/Flat), not the hotel",2026-08-11T02:40:11
+7953,24,river-house-bed-breakfast,river house bed & breakfast,20260811-124034,no_agoda_match,rejected 'Laluna River House' name=76% strict=47% dist=16885.98km same_city=False,2026-08-11T12:40:44
+8525,24,retiro-lovely-and-modern-apartment,retiro lovely and modern apartment,20260811-124034,no_agoda_match,no candidate above name threshold,2026-08-11T12:40:48
+8464,24,monoambiente-manquel,monoambiente manquel,20260811-124034,no_agoda_match,"rejected 'Monoambiente Manquel': individually-listed accommodation (Apartment/Flat), not the hotel",2026-08-11T12:41:20
+8239,24,cabanas-la-belen,cabanas la belen,20260811-124235,no_agoda_match,no agoda suggestion,2026-08-11T12:42:42
+7809,24,tango-cozy-cuba,tango cozy cuba,20260811-124235,no_agoda_match,rejected 'Cozy TANGO studio near Arbat' name=80% strict=56% dist=16085.12km same_city=False,2026-08-11T12:42:49
+8426,24,flat-in-las-canitas,flat in las cañitas.,20260811-124235,no_agoda_match,"rejected 'Exclusive 1 bedroom flat in Las Canitas Palermo': individually-listed accommodation (Apartment/Flat), not the hotel",2026-08-11T12:42:52
+8342,24,studio-en-palermo-soho,studio en palermo soho,20260811-124235,no_agoda_match,"rejected 'Studio en Palermo Soho': individually-listed accommodation (Apartment/Flat), not the hotel",2026-08-11T12:43:00
+8637,24,exclusivo-studio-en-palermo-queens,exclusivo studio en palermo queens,20260811-124235,no_agoda_match,"rejected 'Studio Exclusivo en Palermo Queens': individually-listed accommodation (Apartment/Flat), not the hotel",2026-08-11T12:43:46
+602,1280,pearl-marina-hotel-apartment,pearl marina hotel apartment,20260811-162146,needs_image_backfill,8 room(s) published without a thumbnail this run,2026-08-11T16:32:39
+604,1280,anantara-the-palm-dubai-resort,anantara the palm dubai resort,20260811-162146,needs_image_backfill,72 room(s) published without a thumbnail this run,2026-08-11T16:33:22
+605,1280,hilton-dubai-the-walk,hilton dubai the walk,20260811-162146,needs_image_backfill,31 room(s) published without a thumbnail this run,2026-08-11T16:33:50
+606,1280,hilton-dubai-jumeirah,hilton dubai jumeirah,20260811-162146,needs_image_backfill,50 room(s) published without a thumbnail this run,2026-08-11T16:34:27
+607,1280,ja-ocean-view-hotel,ja ocean view hotel,20260811-162146,no_agoda_match,rejected 'OKINAWA PRINCE HOTEL OCEAN VIEW GINOWAN' name=91% strict=55% dist=7172.49km same_city=False,2026-08-11T16:34:33
+608,1280,fairmont-the-palm,fairmont the palm,20260811-162146,needs_image_backfill,81 room(s) published without a thumbnail this run,2026-08-11T16:35:19
+609,1280,nihal-residency-hotel-apartments-667,nihal residency hotel apartments,20260811-162146,no_rooms_any_date,"agoda source=http, bookme rooms=0",2026-08-11T16:35:47
+610,1280,swissotel-living-al-ghurair-21,swissotel living al ghurair,20260811-162146,needs_image_backfill,5 room(s) published without a thumbnail this run,2026-08-11T16:36:18
+611,1280,fairmont-dubai,fairmont dubai,20260811-162146,needs_image_backfill,48 room(s) published without a thumbnail this run,2026-08-11T16:36:53
+69,602,1280,pearl-marina-hotel-apartment,pearl marina hotel apartment,20260812-162434,resolved,,2026-08-12T16:26:09
+70,602,1280,pearl-marina-hotel-apartment,pearl marina hotel apartment,20260812-162434,needs_image_backfill,15 room(s) published without a thumbnail this run,2026-08-12T16:26:09
+71,604,1280,anantara-the-palm-dubai-resort,anantara the palm dubai resort,20260812-162434,resolved,,2026-08-12T16:27:35
+72,604,1280,anantara-the-palm-dubai-resort,anantara the palm dubai resort,20260812-162434,needs_image_backfill,3 room(s) published without a thumbnail this run,2026-08-12T16:27:35
+73,602,1280,pearl-marina-hotel-apartment,pearl marina hotel apartment,20260812-163040,resolved,,2026-08-12T16:32:16
+74,602,1280,pearl-marina-hotel-apartment,pearl marina hotel apartment,20260812-163040,needs_image_backfill,12 room(s) published without a thumbnail this run,2026-08-12T16:32:16
+75,604,1280,anantara-the-palm-dubai-resort,anantara the palm dubai resort,20260812-163040,resolved,,2026-08-12T16:32:56
+76,607,1280,ja-ocean-view-hotel,ja ocean view hotel,20260812-171637,no_agoda_match,rejected 'OKINAWA PRINCE HOTEL OCEAN VIEW GINOWAN' name=91% strict=55% dist=7172.49km same_city=False,2026-08-12T17:19:26
+77,602,1280,pearl-marina-hotel-apartment,pearl marina hotel apartment,20260812-173846,resolved,,2026-08-12T17:40:28
+78,602,1280,pearl-marina-hotel-apartment,pearl marina hotel apartment,20260812-173846,needs_image_backfill,11 room(s) published without a thumbnail this run,2026-08-12T17:40:28
+79,604,1280,anantara-the-palm-dubai-resort,anantara the palm dubai resort,20260812-173846,resolved,,2026-08-12T17:40:56

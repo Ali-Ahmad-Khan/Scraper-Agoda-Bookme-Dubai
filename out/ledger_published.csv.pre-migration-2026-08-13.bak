@@ -1,0 +1,41 @@
+v2_common_hotel_id,city_id,slug,name,run_id,rooms_inserted,images_uploaded,published_at
+7288,24,wilton-hotel-buenos-aires,wilton hotel buenos aires,20260806-164144,4,22,2026-08-06T16:43:06
+7442,24,up-viamonte,up viamonte,20260806-164144,6,36,2026-08-06T16:44:22
+7674,24,puerto-tigre,puerto tigre,20260806-164144,7,36,2026-08-06T16:45:57
+7088,24,howard-johnson-plaza-florida-street,howard johnson plaza florida street,20260806-172509,38,150,2026-08-06T17:35:22
+7169,24,regente-palace-hotel,regente palace hotel,20260806-172509,9,41,2026-08-06T17:36:04
+7079,24,ayacucho-palace-hotel,ayacucho palace hotel,20260806-172509,3,18,2026-08-06T17:36:26
+7457,24,krista-hotel-boutique,krista hotel boutique,20260806-172509,7,42,2026-08-06T17:37:11
+7271,24,unique-executive-central-510,unique executive central,20260806-172509,7,37,2026-08-06T17:37:53
+56643,9289,hotel-fabrik-wien,hotel fabrik wien,20260811-013135,2,12,2026-08-11T01:43:41
+56173,9289,arcotel-donauzentrum-247,arcotel donauzentrum,20260811-013135,22,124,2026-08-11T01:44:29
+57014,9289,ruby-lissi-hotel-vienna,ruby lissi hotel vienna,20260811-013135,7,54,2026-08-11T01:44:54
+58453,5138,golden-horn-apart-hotel,golden horn apart hotel,20260811-015527,6,36,2026-08-11T02:04:08
+86224,4752,dhaka-golden-inn,dhaka golden inn,20260811-020416,5,26,2026-08-11T02:14:43
+59569,4752,garden-residents,garden residents,20260811-020416,5,27,2026-08-11T02:15:31
+59578,4752,eastern-house,eastern house,20260811-020416,4,17,2026-08-11T02:15:50
+16933,9177,apartment-at-republic-square,apartment at republic square,20260811-021550,1,6,2026-08-11T02:21:59
+16669,9177,daniel-boutique-hotel,daniel boutique hotel,20260811-021550,4,24,2026-08-11T02:22:25
+16655,9177,cross-resort-hotel,cross resort hotel,20260811-021550,10,56,2026-08-11T02:23:00
+75840,13413,hotel-do-grande-rio,hotel do grande rio,20260811-022313,5,27,2026-08-11T02:24:51
+73503,13413,pousada-da-mana,pousada da mana,20260811-022313,3,24,2026-08-11T02:25:19
+74159,13413,bienal-suites,bienal suites,20260811-022313,4,12,2026-08-11T02:25:42
+74032,13413,lider-palace,lider palace,20260811-022313,7,32,2026-08-11T02:26:03
+2549,9674,as-tirana-hotel,as tirana hotel,20260811-022603,5,29,2026-08-11T02:27:51
+12462,560,casa-septem,casa septem,20260811-023309,2,12,2026-08-11T02:34:15
+7671,24,byblos-palermo-soho,byblos palermo soho,20260811-124034,1,7,2026-08-11T12:41:18
+85543,24,dazzler-by-wyndham-buenos-aires-palermo,dazzler by wyndham buenos aires palermo,20260811-124235,10,40,2026-08-11T12:43:44
+602,1280,pearl-marina-hotel-apartment,pearl marina hotel apartment,20260811-162146,9,22,2026-08-11T16:32:39
+603,1280,anantara-downtown-dubai,anantara downtown dubai,20260811-162146,0,42,2026-08-11T16:32:58
+604,1280,anantara-the-palm-dubai-resort,anantara the palm dubai resort,20260811-162146,74,63,2026-08-11T16:33:22
+605,1280,hilton-dubai-the-walk,hilton dubai the walk,20260811-162146,39,90,2026-08-11T16:33:50
+606,1280,hilton-dubai-jumeirah,hilton dubai jumeirah,20260811-162146,63,102,2026-08-11T16:34:27
+608,1280,fairmont-the-palm,fairmont the palm,20260811-162146,81,0,2026-08-11T16:35:19
+610,1280,swissotel-living-al-ghurair-21,swissotel living al ghurair,20260811-162146,10,30,2026-08-11T16:36:18
+611,1280,fairmont-dubai,fairmont dubai,20260811-162146,55,41,2026-08-11T16:36:53
+35,602,1280,pearl-marina-hotel-apartment,pearl marina hotel apartment,20260812-162434,0,32,2026-08-12T16:26:09
+36,604,1280,anantara-the-palm-dubai-resort,anantara the palm dubai resort,20260812-162434,0,588,2026-08-12T16:27:35
+37,602,1280,pearl-marina-hotel-apartment,pearl marina hotel apartment,20260812-163040,0,27,2026-08-12T16:32:16
+38,604,1280,anantara-the-palm-dubai-resort,anantara the palm dubai resort,20260812-163040,0,550,2026-08-12T16:32:56
+39,602,1280,pearl-marina-hotel-apartment,pearl marina hotel apartment,20260812-173846,0,10,2026-08-12T17:40:28
+40,604,1280,anantara-the-palm-dubai-resort,anantara the palm dubai resort,20260812-173846,0,36,2026-08-12T17:40:56

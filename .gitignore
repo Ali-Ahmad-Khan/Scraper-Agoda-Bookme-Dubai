@@ -1,0 +1,14 @@
+DB_FINDINGS.md
+DIAGNOSIS.md
+HANDOVER.md
+IMPLEMENTATION_PLAN.md
+RELIABILITY.md
+REPORT.md
+ROOM_CATEGORIES.md
+WASTED_WORK_AUDIT.md
+.env
+venv/
+__pycache__/
+*.pyc
+.DS_Store
+out/runs/

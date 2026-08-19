@@ -1,0 +1,10 @@
+requests
+rapidfuzz
+playwright
+python-dotenv
+
+# No longer optional: the pipeline writes image bytes into Bookme's own object
+# storage and rows into its database, so pipeline.cos and pipeline.db import
+# these at startup.
+boto3
+pymysql
