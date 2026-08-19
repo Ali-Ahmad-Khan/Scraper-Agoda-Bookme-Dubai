@@ -859,6 +859,97 @@ reflects the current rules, not stale ones baked into the plan file.
 "looks broken but isn't" observability gap and the audit specifically found
 and closed the one wasteful-resume gap the closest existing precedent had.
 
+**D-47 — A resumed Phase 2 must skip hotels already committed, not just avoid
+corrupting them.**
+D-46 made a crash mid-commit *safe* to resume (re-mirroring an already-imaged
+room is a no-op, re-publishing is COALESCE-guarded) but not *quiet* — the
+original Phase 2 walked every hotel in the plan unconditionally, so a resumed
+run re-queried and re-printed a line for every hotel already done, burying the
+one signal that matters (what's still pending) under noise. For an operator
+who was explicitly told "just re-run it, you don't need to look at anything,"
+noise defeats the point as much as a wrong answer would.
+Fixed by extracting `_phase2_skip_ids(led)` (= `fresh_ids() - unresolved_ids()`,
+the exact same nuance the top-level hotel selection already uses — a hotel
+published but still owing an image backfill is NOT skipped) and filtering
+Phase 2's `work2` against it, reading the ledger fresh at Phase 2's own start
+rather than trusting the value computed before Phase 1 ran.
+**Live-verified with a real `kill -9`**, not just reasoned about: started a
+real (non-dry) run, killed it mid-download after 2 hotels had committed,
+re-ran the identical command with no flags changed and nothing inspected
+first. It printed `1 hotel(s) in the plan are already published and resolved
+-- resuming with the remaining 6` and finished cleanly, `[ok]` on both
+reconciliation checks. One honest nuance surfaced by the same test: `--limit
+N` selects "the next N hotels still needing work," which is *dynamic* — if
+the killed run fully resolved one hotel before dying, the resumed
+invocation's "next N" can shift by one member, and the plan checkpoint
+correctly refuses to reuse a plan built for a different hotel set (re-fetches
+via Agoda/Bookme/Booking rather than silently reusing stale data). No MySQL or
+COS work was lost or duplicated either way — only some network calls were
+re-spent. This is the direct argument for D-48's `--slugs`: an explicit,
+stable hotel list doesn't drift, so a resume on it reuses the checkpoint
+perfectly.
+
+**D-48 — Three new ways to target a run: `--slugs`, `--slugs-file`, and a
+wizard range question. A raw database id-range flag was proposed and
+deliberately NOT built.**
+Operator ask: run against named hotels without any city context, and select a
+*position range* within a city's hotel list ("hotels 1000 to 1564") rather
+than only "the first N."
+
+`--slugs SLUG1,SLUG2,...` / `--slugs-file PATH` (unioned if both given) look
+hotels up directly (`db.hotels_by_slug`, identical row shape to `db.hotels()`
+so nothing downstream needs a special case) and bypass city scope AND the
+ledger-freshness skip entirely — naming a hotel is a request to process it
+*now*, not a smaller city sweep. Mutually exclusive with `--city`/`--city-id`/
+`--limit`/`--offset`/`--random` (argparse-enforced), since those only mean
+anything as part of choosing a city.
+
+The range: `db.hotels()`'s own SQL is `WHERE city_id IN (...) ORDER BY id` —
+`v2_common_hotels.id` is a **global** auto-increment shared across every city,
+so "hotel id 1000–1564" and "the 1000th–1564th hotel of Dubai's own list" are
+different, usually very different, sets. The operator's own stated intent
+("limit 10 would process first 10, so on... run 2500 to 3000") was clearly the
+second — a **position** within the already-city-filtered, id-ordered list —
+so that's what got built: `--offset N` (needs `--limit`, incompatible with
+`--random` — offsetting into a per-run-reshuffled list isn't a stable range),
+plus the SAME range as a natural wizard question (`'1000-1564'` or
+`'1000:1564'`, parsed by `_parse_bound_reply`) rather than only a bare flag an
+operator would need to already know exists.
+A literal `v2_common_hotels.id BETWEEN MIN AND MAX` flag (city-agnostic, a
+different tool — a whole-table sweep unrelated to city boundaries) was
+proposed and explicitly not built, because it wasn't actually what was asked
+for. Build it only on a fresh, explicit ask.
+Also flagged, not built: if the *motivation* for range-slicing is running
+several processes in parallel for speed rather than just targeting a slice,
+`out/.run.lock` currently blocks a second simultaneous invocation entirely —
+that needs the lock changed to per-slice, a separate and bigger piece of work.
+
+**D-49 — Wizard range is 1-indexed and INCLUSIVE of both ends. Fixed a real
+off-by-one from D-48.**
+As shipped, `_parse_bound_reply("6-7")` computed `(bound=1, offset=6)` — a
+Python 0-indexed slice `todo[6:7]`, which is ONE hotel (the 7th), not the two
+a person means by "6 to 7." Caught by the operator asking directly rather than
+by review. Fixed: `"A-B"` now means the Ath through Bth hotel, both included
+(`end - start + 1` hotels, `start - 1` as the 0-indexed slice offset); `"A-A"`
+is a valid single-hotel selection, only `end < start` or `start < 1` is
+rejected. The raw `--offset`/`--limit` CLI flags are UNCHANGED (still 0-indexed,
+SQL `OFFSET`/`LIMIT` convention) — this fix is scoped to `_parse_bound_reply`
+only, which nothing else calls, so the two conventions (flag = SQL-familiar,
+wizard = how a person reads a range aloud) stay deliberately different for
+their deliberately different audiences.
+
+**D-50 — The download/publish confirmation gate can be pre-answered ONCE, up
+front, before discovery even starts.**
+Previously an operator who already knew they wanted a hands-off run still had
+to sit through the whole discovery phase to discover a second prompt was
+coming. `_wizard()` now asks first, before the city question: *"Pause and let
+you review the discovered plan before downloading starts? [Y/n]"*. Answering
+'n' sets `a.yes = True` — reusing the flag's EXISTING meaning rather than a
+parallel flag that could quietly drift from it — so the later gate (D-46) is
+skipped automatically. Live-verified: piped `n` as the first answer, no
+`Proceed to download...` prompt appeared, the run went straight through to
+completion.
+
 ## Open / unsettled
 
 - **O-1 — Is `/hotels/api/availability` a supported contract?** Undocumented,

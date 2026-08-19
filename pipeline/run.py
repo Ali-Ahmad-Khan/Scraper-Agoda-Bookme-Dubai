@@ -1820,19 +1820,28 @@ def _selftest_cli_targeting():
     assert _parse_bound_reply("25") == (25, 0)
     assert _parse_bound_reply("0") is _BOUND_INVALID, "zero is not a valid count"
     assert _parse_bound_reply("-5") is _BOUND_INVALID
-    # THE FEATURE THAT MATTERS: "1000-1564" -> (count=564, offset=1000), a
-    # POSITION in this city's own list, never a raw database id.
-    assert _parse_bound_reply("1000-1564") == (564, 1000), _parse_bound_reply("1000-1564")
-    assert _parse_bound_reply("1000:1564") == (564, 1000), "':' must work like '-'"
-    assert _parse_bound_reply(" 10 - 20 ") == (10, 10), "range tolerates spacing"
-    assert _parse_bound_reply("1564-1000") is _BOUND_INVALID, (
-        "a backwards range (end <= start) must be rejected, not silently negative")
-    assert _parse_bound_reply("5-5") is _BOUND_INVALID, "an empty range must be rejected"
+    # THE FEATURE THAT MATTERS: 1-indexed, BOTH ENDS INCLUDED, matching how a
+    # person reads the range aloud -- '6-7' is 2 hotels (the 6th and 7th), not
+    # 1. Converted to a 0-indexed (count, offset) pair for the actual slice.
+    assert _parse_bound_reply("6-7") == (2, 5), (
+        f"'6-7' must select 2 hotels (6th and 7th), got {_parse_bound_reply('6-7')}")
+    assert _parse_bound_reply("1000-1643") == (644, 999), (
+        f"'1000-1643' must select 644 hotels (1000th..1643rd inclusive), "
+        f"got {_parse_bound_reply('1000-1643')}")
+    assert _parse_bound_reply("1000:1643") == (644, 999), "':' must work like '-'"
+    assert _parse_bound_reply(" 10 - 19 ") == (10, 9), "range tolerates spacing"
+    assert _parse_bound_reply("6-6") == (1, 5), (
+        "equal ends must select exactly that ONE hotel, not be rejected as empty")
+    assert _parse_bound_reply("7-6") is _BOUND_INVALID, (
+        "a genuinely backwards range (end < start) must be rejected")
+    assert _parse_bound_reply("0-5") is _BOUND_INVALID, (
+        "position 0 does not exist -- the list is 1-indexed, like the wizard "
+        "displays it, not 0-indexed like a Python slice")
     assert _parse_bound_reply("banana") is _BOUND_INVALID
 
     print("OK: --slugs/--slugs-file union+dedupe+comments, wizard range "
-          "parsing ('1000-1564' -> offset=1000 count=564), rejects zero/"
-          "negative/backwards/empty ranges")
+          "parsing ('6-7' -> 2 hotels inclusive, 1-indexed), accepts a "
+          "single-hotel 'A-A', rejects position 0 and backwards ranges")
 
 
 def _selftest_agoda_breaker():
@@ -2615,6 +2624,46 @@ def _ask(prompt, back=True):
     return raw
 
 
+def _menu(title, options, back=True):
+    """Print a numbered menu, return the CHOSEN OPTION'S VALUE.
+
+    `options` is [(label, value), ...]. The operator types the number they
+    read on screen, never a keyword ('all', 'yes') and never a raw id they'd
+    have to copy off an earlier line -- typing is reserved for the one place
+    in this wizard nothing on screen could stand in for it (an operator-
+    chosen count or range). 1-indexed because that is what a person reads off
+    a numbered list, not 0-indexed developer habit.
+    """
+    print(f"\n{title}")
+    for i, (label, _val) in enumerate(options, 1):
+        print(f"  {i}) {label}")
+    hint = " ['b' back, 'q' quit]" if back else " ['q' quit]"
+    while True:
+        raw = input(f"  > {hint}: ").strip()
+        if raw.lower() in ("q", "quit", "exit"):
+            raise SystemExit("aborted")
+        if back and raw.lower() in ("b", "back"):
+            raise _Back
+        if raw.isdigit() and 1 <= int(raw) <= len(options):
+            return options[int(raw) - 1][1]
+        print(f"  enter a number from 1 to {len(options)}")
+
+
+def _ask_yn(prompt, default=True):
+    """A plain y/n confirmation -- deliberately NOT a numbered menu. Two
+    genuinely opposite options with an obvious default read faster as
+    '[Y/n]: ' than as a two-line menu forcing a '1' or '2' keystroke for
+    something that fits in one character. Enter alone takes the default.
+    """
+    hint = "[Y/n]" if default else "[y/N]"
+    raw = input(f"{prompt} {hint}: ").strip().lower()
+    if raw in ("q", "quit", "exit"):
+        raise SystemExit("aborted")
+    if not raw:
+        return default
+    return raw in ("y", "yes")
+
+
 def _city_runnable(conn, led, city_id, fresh_ids=None):
     """(total, fresh, runnable) hotel counts for one city_id, cross-referenced
     against the published ledger -- `fresh` is published within
@@ -2650,10 +2699,19 @@ def _parse_bound_reply(reply):
     the call site -- `bound is _BOUND_INVALID` is the only check a caller
     needs, never a bare `is None` (that's the valid "all" case).
 
-    The range is a POSITION within this city's own list (the same order
-    --limit alone already walks, v2_common_hotels.id ascending), never a raw
-    database id -- ids are global across every city, so a literal id range
-    would not even stay inside the chosen one.
+    The range is 1-INDEXED and INCLUSIVE of both ends, matching how a person
+    reads it aloud: '6-7' is the 6th and 7th hotel (2 of them), '1000-1643' is
+    the 1000th through the 1643rd (644 of them) -- 'A-A' (equal ends) is a
+    valid single-hotel selection, only A > B is rejected as backwards. This is
+    the ONE conversion point from that human-facing convention to the
+    (start, count) pair the rest of the pipeline slices with -- `offset` ends
+    up 0-indexed here so `todo[offset:offset+bound]` lands on the right
+    elements, but the CALLER-FACING number ('A' as typed) is always 1-indexed.
+
+    The position is WITHIN this city's own list (the same order --limit alone
+    already walks, v2_common_hotels.id ascending), never a raw database id --
+    ids are global across every city, so a literal id range would not even
+    stay inside the chosen one.
     """
     reply = reply.strip()
     if reply.lower() == "all":
@@ -2663,8 +2721,8 @@ def _parse_bound_reply(reply):
     m = _RANGE_RE.match(reply)
     if m:
         start, end = int(m.group(1)), int(m.group(2))
-        if end > start:
-            return end - start, start
+        if start >= 1 and end >= start:
+            return end - start + 1, start - 1
     return _BOUND_INVALID
 
 
@@ -2672,8 +2730,21 @@ def _wizard(conn, led):
     """Interactive city + scope picker, for when the operator did not pass
     --city. Every question accepts 'b' to step back one question and 'q' to
     quit outright. Returns
-    (chosen_cities, city_query, limit_or_None, offset, rooms_from).
+    (chosen_cities, city_query, limit_or_None, offset, rooms_from, skip_gate).
+
+    `skip_gate` answers the VERY FIRST question, before city selection even
+    starts: does this operator want to be asked again, after discovery, before
+    downloading and publishing begin? Asked up front rather than only
+    discovered at the end of a (possibly long) discovery phase, so someone who
+    already knows they want a hands-off run can say so once and walk away,
+    instead of sitting through discovery only to find a second prompt waiting
+    for them. 'n' here sets the SAME `--yes` semantics the gate already
+    understands from the CLI -- no separate flag or code path, just an
+    interactive way to pre-answer it.
     """
+    run_hands_off = not _ask_yn(
+        "\nPause and let you review the discovered plan before downloading "
+        "images and publishing starts?", default=True)
     step, city_query, matches, chosen, stats = 0, None, None, None, None
     bound, offset = None, 0
     while True:
@@ -2694,14 +2765,18 @@ def _wizard(conn, led):
                 _fresh = led.fresh_ids()      # read once, not once per city
                 stats = {c["id"]: _city_runnable(conn, led, c["id"], _fresh)
                          for c in matches}
+                name_w = max(4, max(len((c["name_en"] or "").title()) for c in matches))
+                print(f"\n  {'id':>7}  {'name':<{name_w}}  {'total':>6}  "
+                     f"{'runnable':>8}  {'fresh*':>6}")
+                print(f"  {'-' * 7}  {'-' * name_w}  {'-' * 6}  {'-' * 8}  {'-' * 6}")
                 for c in matches:
                     total, fresh, runnable = stats[c["id"]]
-                    print(f"  {c['id']:>7}  {(c['name_en'] or '').title():<28} "
-                          f"{total:>6} hotels total  {runnable:>6} runnable now  "
-                          f"{fresh:>6} already published within "
-                          f"{config.LEDGER_STALE_DAYS}d (would be skipped)")
-                reply = _ask("run against which? ['all', or a comma-separated "
-                             "list of ids]")
+                    print(f"  {c['id']:>7}  {(c['name_en'] or '').title():<{name_w}}  "
+                         f"{total:>6}  {runnable:>8}  {fresh:>6}")
+                print(f"\n  * fresh = published within {config.LEDGER_STALE_DAYS}d, "
+                     f"would be skipped")
+                reply = _ask("\nrun against which id(s)? [comma-separated, or "
+                             "'all']")
                 if reply.lower() == "all":
                     chosen = [c for c in matches if c["hotels"]]
                 else:
@@ -2717,22 +2792,33 @@ def _wizard(conn, led):
                 total = sum(stats[c["id"]][0] for c in chosen)
                 fresh = sum(stats[c["id"]][1] for c in chosen)
                 runnable = total - fresh
-                print(f"\nscope: city_id(s) {[c['id'] for c in chosen]} -> "
-                      f"{total} hotels total, {fresh} skipped (published within "
-                      f"config.LEDGER_STALE_DAYS={config.LEDGER_STALE_DAYS} days), "
-                      f"{runnable} runnable right now")
+                names = ", ".join((c["name_en"] or "?").title() for c in chosen)
+                print(f"\nscope: {names} ({[c['id'] for c in chosen]}) -> "
+                     f"{total} hotels total, {fresh} already published "
+                     f"(skipped), {runnable} runnable now")
                 if runnable == 0:
                     print("  nothing runnable -- every hotel in scope was "
                           "published within the staleness window")
-                reply = _ask(f"run all {runnable} runnable hotels, bound to N, "
-                             f"or a range 'A-B'? ['all', a number, or e.g. "
-                             f"'1000-1564' for the 1000th through 1564th of "
-                             f"this list]")
-                bound, offset = _parse_bound_reply(reply)
-                if bound is _BOUND_INVALID:
-                    print("  enter 'all', a positive number, or a range like "
-                          "'1000-1564'")
-                    continue
+                mode = _menu("how many hotels?", [
+                    (f"run all {runnable} runnable hotels", "all"),
+                    ("bound to the first N", "bound"),
+                    ("a specific range, e.g. the 1000th-1564th", "range"),
+                ])
+                if mode == "all":
+                    bound, offset = None, 0
+                elif mode == "bound":
+                    reply = _ask("how many hotels?")
+                    if not (reply.isdigit() and int(reply) > 0):
+                        print("  enter a positive number")
+                        continue
+                    bound, offset = int(reply), 0
+                else:
+                    reply = _ask("range (both ends included), e.g. 1000-1564 "
+                                 "= the 1000th through the 1564th hotel")
+                    bound, offset = _parse_bound_reply(reply)
+                    if bound is _BOUND_INVALID:
+                        print("  enter a range like '1000-1564'")
+                        continue
                 if offset and offset >= runnable:
                     print(f"  {offset} is past the {runnable} runnable hotels "
                           f"in scope -- nothing would be selected, try again")
@@ -2746,7 +2832,7 @@ def _wizard(conn, led):
                 # credentials configured yet) -- see main()'s AuthFailed
                 # handling, which degrades to it automatically and loudly if
                 # that happens mid-run, never by silently defaulting to it.
-                return chosen, city_query, bound, offset, "both"
+                return chosen, city_query, bound, offset, "both", run_hands_off
         except _Back:
             step = max(0, step - 1)
 
@@ -3009,7 +3095,15 @@ def main(argv=None):
         print(f"\n{len(explicit_hotels)}/{len(slugs)} slug(s) matched, spanning "
              f"city_id(s) {city_ids}")
     elif a.city is None:
-        chosen, city_query, a.limit, a.offset, a.rooms_from = _wizard(conn, led)
+        chosen, city_query, a.limit, a.offset, a.rooms_from, run_hands_off = \
+            _wizard(conn, led)
+        # Reuses --yes's EXISTING meaning (skip the confirmation, proceed
+        # automatically) rather than inventing a second flag that would mean
+        # the same thing -- an operator who answered 'n' up front should get
+        # exactly the behaviour someone who passed --yes on the command line
+        # gets, not a parallel code path that could quietly drift from it.
+        if run_hands_off:
+            a.yes = True
     else:
         city_query = a.city
         matches = db.resolve_city(conn, a.city)

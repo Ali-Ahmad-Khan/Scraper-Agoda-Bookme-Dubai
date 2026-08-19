@@ -45,6 +45,9 @@ python -m pipeline.run --city Dubai --limit 20
 | `--dry-run` | do everything except upload images and write to MySQL. Does not take or need the run lock |
 | `--no-booking` | skip the Booking.com gap-fill (on by default) — see below |
 | `--plan-only` | discover and map every hotel, print the coverage summary, then stop — no image downloaded, nothing written to MySQL. See "Two phases" below |
+| `--offset N` | (needs `--limit`, needs `--city`) skip the first N hotels of the city's own list before applying `--limit` — `--offset 1000 --limit 564` is "the 1000th–1564th hotel of this city," **not** a raw `v2_common_hotels.id` range (ids are global across every city). Same question is available in the wizard as a natural `'1000-1564'` reply |
+| `--slugs SLUG1,SLUG2,...` | run against these exact hotels by slug — no `--city`, no wizard, no ledger-freshness skip. Mutually exclusive with `--city`/`--limit`/`--offset`/`--random` |
+| `--slugs-file PATH` | same as `--slugs`, one per line (`#` comments and blanks ignored) — unions with `--slugs` if both given |
 | `--selftest` | offline checks, no network, no database |
 
 ### Two phases: discover, then commit — with a checkpoint and a gate between them

@@ -115,3 +115,4 @@ row_id,v2_common_hotel_id,city_id,slug,name,run_id,reason,detail,last_attempted_
 114,404,9658,al-waleed-palace-hotel-apartments-oud-metha,al waleed palace hotel apartments oud metha,20260819-150311,resolved,,2026-08-19T15:10:31
 115,404,9658,al-waleed-palace-hotel-apartments-oud-metha,al waleed palace hotel apartments oud metha,20260819-150311,needs_image_backfill,3 room(s) published without a thumbnail this run,2026-08-19T15:10:31
 116,606,1280,hilton-dubai-jumeirah,hilton dubai jumeirah,20260819-163144,error,BrokenPipeError: [Errno 32] Broken pipe,2026-08-19T16:33:22
+117,613,1280,movenpick-hotel-jumeirah-lakes-towers-dubai,movenpick hotel jumeirah lakes towers dubai,20260819-164510,error,BrokenPipeError: [Errno 32] Broken pipe,2026-08-19T16:47:55
