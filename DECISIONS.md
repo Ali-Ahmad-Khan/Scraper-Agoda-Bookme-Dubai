@@ -950,6 +950,272 @@ skipped automatically. Live-verified: piped `n` as the first answer, no
 `Proceed to download...` prompt appeared, the run went straight through to
 completion.
 
+**D-51 — Production post-mortem, run `20260819-063516`: five independent
+failures, only one of them about match quality.**
+15.9 hours, 821 of 2,916 hotels reached, **zero mapped**. Bookme was flawless
+throughout (2,916/2,916 answered on all 28 shapes, 0 errors, 0 unavailable,
+~24k room names), and the manifest confirms `bookme_api_base` was **prod** —
+so this was not an environment problem. Each failure below is fixed, with the
+evidence that drove it:
+
+1. **221 hotels destroyed by a read that did not need to be fatal.** 100% of
+   the MySQL drops were on the per-hotel `existing-room check`, 100% resulted
+   in the hotel being deferred, and the denominator visibly inflated as they
+   requeued (`[336/3183]` → `[820/3404]`). That read only SCOPES the Booking
+   gap-fill — Phase 2 re-reads the truth before writing — and prod has **0
+   v2_rooms rows for Dubai**, so it was scoping against an empty table. Now one
+   bulk `existing_rooms_bulk(city_ids)` before discovery, non-fatal on failure.
+   2,916 queries → 1, and a DB blip can no longer discard completed work.
+2. **The circuit breaker was unreachable on the dominant path.** `if not
+   bm_rooms: continue` fired *before* the breaker check — 207 hotels took
+   exactly that branch — and a plain `no_agoda_match` reset `agoda_sick` to 0,
+   so interleaved rejections kept the counter from ever accumulating. Six
+   escalating cooldowns (3.75 hours of sleeping) and the breaker never once
+   evaluated. Breaker now runs on every path; only an ASKED-AND-ANSWERED
+   negative clears the counter.
+3. **The matcher stopped looking while in the wrong city.** See D-52.
+4. **`size_sqft` does not exist on prod.** See D-53.
+5. **The run ended in an unhandled `pymysql.err.Error: Already closed`**, so a
+   completed run exited non-zero and looked like a crash. Guarded.
+
+**VALIDATED LIVE against prod, 2026-08-20** — 40 Dubai hotels, `--plan-only`,
+nothing written:
+
+| | first prod run | after these fixes |
+|---|---|---|
+| hotels mapped | **0** of 821 | **33 of 40 (82%)** |
+| rooms with a photo | 0 | **833 of 916 (91%)** |
+| MySQL drops / deferrals | 221 | **0** |
+| errors | 0 (nothing got far enough) | **0** |
+| booking rescues | 0 | **196 rooms across 10 hotels** |
+| throughput | 15.9 h → 0 results | 30.9 min for 40 = **46 s/hotel** |
+
+The `-> mapped` line, entirely absent from 1,062 lines of the production log,
+now appears for 33 of 40 hotels. Of the 7 not published, 6 were `listed but
+zero rooms` on *both* platforms and 1 had no listing anywhere — genuine
+negatives, each reached only after the full 28-shape Bookme ladder and Agoda's
+own escalation.
+
+⚠️ **Throughput implication, stated plainly:** 46 s/hotel × 2,916 hotels ≈ **37
+hours of discovery** for a full Dubai prod run, before Phase 2 downloads a
+single image. That is a rate-limit floor, not a bug — Agoda is paced at ≥1.5 s
+and a hotel needs ~15-20 of its requests. Run it with the plan checkpoint and
+expect to resume across sessions; do not expect a full city in an afternoon.
+
+*Two hypotheses tested and FALSIFIED — recorded so nobody re-runs them:*
+* **Not an idle timeout.** `wait_timeout` is 3600s, `max_user_connections` is
+  unlimited, and a live idle test held the connection open successfully at 30,
+  60, 120, 240 and 400 seconds. The drops are specific to that host's network
+  path over a 16-hour run — which is *why* the fix is tolerance, not diagnosis.
+* **Not a crossed environment.** `manifest.json` records
+  `bookme_api_base: https://api.bookmesky.com` against `bookme_sky_prod`.
+  Correctly paired.
+
+**D-52 — The match early-break must be CITY-aware. Measured +25pp of recall.**
+`match_hotel` stopped issuing queries as soon as ANY candidate scored
+≥`NAME_STRONG`, regardless of city — so a global namesake suppressed the
+disambiguating `"<name> <destination>"` query that would have found the real
+hotel. Measured live against prod Agoda:
+
+```
+'royal plaza'        -> 5 candidates, 0 in Dubai, all scoring 100%
+'royal plaza Dubai'  -> Royal Plaza Hotel Apartments, 100%, IN DUBAI
+```
+
+The pipeline was rejecting the namesake at 5,948 km and filing the hotel as
+absent from Agoda, having never asked the question that would have found it.
+Ranking had the same blindness: name-only sorting put `The Bristol Hotel`
+(100%, 13,518 km) ahead of `The Bristol Hotel (formerly JW Marriott…)` (85%,
+Dubai), so the right hotel could be ranked out of the `top_n` fetch budget.
+
+Measured over 20 real `no_agoda_match` hotels: **3 → 8 found a Dubai
+candidate**. Fixes: break only on a same-city strong match; filter to viable
+candidates before the `top_n` slice, then rank same-city first. Costs zero
+extra requests in the common case — a correct same-city match still stops
+immediately; the extra query is issued only when the strong match is elsewhere,
+which is exactly when it is needed.
+Also closed here: a throttled *candidate fetch* used to fall through to
+`no candidate above name threshold`. If every candidate we could afford to
+check failed to fetch, the hotel was never assessed — that now returns
+`unreachable`, not a verdict.
+
+**D-53 — OUR OWN `size_sqft` migration was applied to UAT and never to prod.
+The writer adapts, but the real fix is the migration.**
+`size_sqft` is not a Bookme field and never was. It is room size taken from
+**Agoda's** room data, which this project added a `v2_rooms` column for (UAT,
+with operator approval) so it could be mapped into Bookme's schema. Prod never
+received that DDL.
+Verified 2026-08-20 against `bookme_sky_prod`: the column is absent, so every
+statement naming it — the INSERT, the COALESCE backfill, the existing-rooms
+read — is a hard `Unknown column` error. **Phase 2 would have failed on every
+single hotel.** It stayed invisible only because the prod run was interrupted
+during discovery and Phase 2 never ran; had the operator answered "y" at the
+gate, all 821 hotels would have crashed.
+**So there are two live options, and they are the operator's call:** apply the
+same one-line migration to prod and size starts populating (94.3% of Agoda
+rooms carry it), or leave prod without it and publish everything except size.
+The adaptive writer below is what makes the second option safe today — it is
+not an argument against the migration.
+`db.room_columns()` reads the real schema once per process and the SQL is built
+from it. Adapting is deliberate: size is a secondary display field, and
+refusing to run an imagery pipeline over a missing optional column is the wrong
+trade. Add the column to prod and it starts populating with no code change.
+*Override if:* prod gains the column — nothing to change, it is detected.
+
+**D-54 — Throttling is engineered THROUGH, not waited out. The sustained rate
+adapts; the run never gives up.**
+Operator direction, and the run's own evidence agrees: six consecutive
+cooldowns each reported *"no successful call since cooldown #1"*. Sleeping did
+not recover the block and could not have — the rate on the far side of each
+sleep was the same rate that caused it. A sleep pauses the burst; it does not
+change the behaviour that triggered it.
+
+So a throttle now **raises the sustained interval first and sleeps second**
+(1.5s floor → ×2 per cooldown → 15s ceiling), and that rate only eases back
+after `RECOVER_AFTER = 40` consecutive successes — never on the first lucky
+call after a block. Session identity (cookie jar **and** User-Agent, varied per
+session, never mid-session) rotates every `AGODA_SICK_ROTATE` sick hotels: one
+immutable UA across tens of thousands of calls is itself an automation
+fingerprint, while a header that changes mid-session is a stronger one.
+
+**The abort is deleted.** An unreachable hotel is now **requeued once** to the
+end of discovery rather than consumed, so an outage costs *time*, not
+*coverage*, and no hotel is written off on an answer we never got. Only a hotel
+that fails the retry too is recorded. What remains is a reporting flag
+(`agoda_degraded`, folder suffix `-AGODA-DEGRADED`) so a thin result is never
+mistaken for a complete answer about a city.
+
+**D-55 — Counters must count the question they are named for.**
+`hotels_published_without_agoda` read **70** in a run that published **zero** —
+it was counting attempts. Split into `hotels_agoda_blind_attempted` (Phase 1)
+and `hotels_agoda_blind_done` (incremented at COMMIT). The gate summary
+substitutes the Phase 1 counter alongside its Phase 1 `hotels_done`, because
+pairing a Phase 1 total with a Phase 2 subtotal made the funnel over-count
+(14 of 12) and flag itself `[MISMATCH]` — caught live, not in review.
+Also fixed: `--slugs`/`--slugs-file` never bound `skipped_here`, so the manifest
+write crashed with `UnboundLocalError` at the very end of a run, after all the
+work was done.
+
+**D-56 — PREVENTION over recovery: the Agoda property cache survives a
+completed run. Measured 93% fewer requests.**
+Everything in D-54 is *reactive* — it triggers once a block has already
+happened. The largest lever for never tripping the limiter is simply to make
+far fewer requests, and the pipeline was throwing that away.
+
+`out/cache/agoda_*.json` is not run scaffolding, it is a **request cache with
+its own expiry already built in**: `_cached_agoda` ages rooms out after
+`CACHE_FRESH_DAYS`, while the date-invariant half (coordinates, isNHA, slug,
+city id) is true until the building changes. The end-of-run sweep deleted it
+wholesale, so every re-run of a city was a full re-scrape.
+
+Measured live on 5 prod hotels, same code, cold vs warm:
+
+| | requests/hotel | full Dubai (2,916) |
+|---|---|---|
+| cold cache | **14.6** | ~42,600 requests |
+| warm cache | **1.0** | ~2,900 requests |
+
+The sweep now keeps `agoda_*.json` and removes only the genuinely run-scoped
+files (the plan, the Bookme probe checkpoint). Also worth knowing: the ladder
+is **68%** of all Agoda requests (50 of 73 in the same measurement) — it is the
+thing the cache is saving, and D-6a forbids shortening it, so caching is the
+only way to not pay for it twice.
+*Override if:* stale room lists ever cause a wrong publish — but note rooms
+already expire on age and only a `ladder_complete` cache is trusted.
+
+**D-57 — The browser fallback was an unmetered hole in the rate discipline.**
+`agoda_browser.fetch_rooms` called `page.goto()` with no reference to the HTTP
+pacer at all. A property page load is not one request — it pulls HTML, JS, XHR
+and images — and the first production run made **89 of them**, on the same
+address, while `agoda.py` was carefully spacing its own calls at 1.5 s. The
+rate limiter saw all of it; our rate limiting saw none of it.
+`_visit()` now charges the shared pacer `BROWSER_PACE_COST = 8` slots before
+navigating (a deliberate under-estimate of a real page load — the point is that
+it costs *something*), via `asyncio.to_thread` so the sleep delays our request
+instead of stalling the browser's own I/O.
+
+**D-58 — Pacing is jittered and duty-cycled, at a measured 24% cost.**
+A run makes ~43,000 Agoda requests. Spacing every one at exactly 1.5 s is a
+metronome — no browser produces a uniform inter-request gap for 17 hours, and
+uniformity is trivially detectable. Every gap is now `interval × U(1.0, 1.45)`,
+and the pacer takes a ~60 s break every 300 requests.
+
+Both only ever ADD delay, so neither can make the client more aggressive than
+the floor allows. `JITTER` is 1.45 rather than something larger on a measured
+trade: what defeats a uniformity check is **variance, not a bigger mean**, and
+the mean is what 43,000 requests pay for — 1.9 lifted the mean gap from 1.5 s
+to 2.19 s (+46%, ≈ +8 h on a full city) to buy no more irregularity than 1.45
+does at +24%.
+
+**Honest cost of prevention, full Dubai, cold:**
+
+| | pacing time |
+|---|---|
+| uniform 1.5 s (old) | ~17.9 h |
+| jittered mean 1.86 s | ~22.0 h |
+| + session breaks | **~24.3 h** |
+| warm cache re-run | **~1.5 h** |
+
+So prevention costs ~36% on a *first* run and saves ~92% on every run after it.
+Set `SESSION_BREAK_EVERY = 0` to disable the breaks if a soak test ever shows
+they buy nothing.
+
+**D-59 — Did the two-phase split cause the throttling? Partly, and the fix is
+not to undo it.**
+Operator hypothesis, and it is mechanically sound: the old interleaved design
+put image mirroring (COS/CDN traffic, not Agoda) between one hotel's Agoda
+requests and the next's, so Agoda saw natural gaps. Phase 1 removed them —
+same total requests, compressed into less wall clock, which is a **higher
+sustained request density** even though `MIN_INTERVAL` never changed.
+Estimated at ~20-35% denser, from mirroring costing roughly 10-30 s/hotel.
+
+It is a contributing factor, not the primary cause — the first production run
+still averaged ~43 s/hotel excluding cooldowns, close to the 46 s measured
+post-fix. And the answer is **not** to re-interleave: the operator's own
+reasoning for two phases holds (a failure mid-interleave leaves partial writes
+scattered across hotels and rooms, which is exactly what would have been
+unrecoverable in a run that failed this badly). D-58's session breaks
+reintroduce the same gaps *deliberately and measurably*, instead of relying on
+download time as an accidental rate limiter.
+
+**D-60 — ONE Chrome for the whole run. The module had been warning against its
+own behaviour.**
+`agoda_browser.py`'s docstring has always said the browser is *"opened ONCE for
+the whole batch"* because *"relaunching per hotel is both slow and exactly the
+pattern bot-detection looks for."* It was not true: `fetch_rooms` opened and
+closed its own browser inside `async with async_playwright()`, and `run.py`
+called it with a **single-hotel list**. The first production run therefore
+launched and tore down Chrome **89 separate times**. The module was describing
+its own worst behaviour as though it were the design.
+
+The justification in `run.py` — *"the price of publishing hotel by hotel so a
+crash cannot lose a day's work"* — **expired at D-46**, when discovery and
+commit were split. Discovery publishes nothing and check-points every hotel to
+`plan.csv`, so a long-lived browser cannot lose work the checkpoint already
+holds. Nobody revisited the comment when the premise under it changed.
+
+Why the root cause was structural, not laziness: Playwright objects are bound
+to the event loop that created them, and `asyncio.run()` **closes that loop on
+every call** — so the browser could not have survived even if someone had kept
+a reference. The fix is a single daemon-thread event loop for the process
+lifetime (`_loop_thread`), with all browser work submitted to it
+(`fetch_rooms_sync`), the page created once (`_session`) and reused.
+
+Verified: three consecutive calls return the *same* page object, one browser is
+launched, and `close()` leaves no stray processes. The live control-property
+selftest still returns 6 rooms matching the HTTP path exactly, so the response
+listener still works across a page that now outlives the call — it is removed
+in a `finally`, or every later visit would stack another copy of it.
+
+**The saving is not mainly the ~4 s per launch.** 89 brand-new Chrome instances
+with empty profiles hitting one host is a far stronger automation signal than
+one session browsing 89 pages; continuity is the point. `rotate()` is wired
+into the Agoda breaker alongside the HTTP session rotation — rotating only the
+HTTP identity would leave half our traffic still wearing the one that was
+blocked.
+*Override if:* a long run shows browser memory growth — recycle the page every
+N visits rather than returning to per-hotel launches.
+
 ## Open / unsettled
 
 - **O-1 — Is `/hotels/api/availability` a supported contract?** Undocumented,

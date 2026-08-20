@@ -101,6 +101,29 @@ ROOM_PROBE_WORKERS = 8
 # gain.
 TRUST_PERMANENT_UNAVAILABLE = True
 
+# --- agoda browser fallback --------------------------------------------------
+# True  = ONE Chrome for the whole run, reused between hotels.
+# False = a fresh Chrome per hotel (the behaviour before 2026-08-20).
+#
+# THIS IS AN OPEN QUESTION, NOT A SETTLED ONE. Both directions are plausible
+# and NEITHER has been measured against Agoda's blocking behaviour:
+#   * persistent  -- one continuous session looks like a person browsing; 89
+#     brand-new browsers with empty profiles do not. But a long-lived session
+#     also accumulates whatever per-session state Agoda counts against us.
+#   * per-hotel   -- every hotel starts from a clean profile with no history,
+#     which may be exactly what resets a per-session counter.
+#
+# What IS measured: the per-hotel mode was in place for the first production
+# run, where the browser fallback recovered rooms for only 8 of 89 properties
+# (9%), and that run was blocked anyway. So per-hotel launching is not a proven
+# defence -- it is simply what happened to be there.
+#
+# Persistent is the default because it is the only one with any evidence behind
+# it (it is ~4s/hotel faster and it is what this module's own docstring always
+# claimed to do). Flip this to False to A/B it; the honest way to settle it is
+# two comparable runs, spaced apart, on the same hotel set.
+AGODA_BROWSER_PERSIST = True
+
 # --- booking.com gap-fill ----------------------------------------------------
 # Booking is a SECOND source, used only where Agoda left a Bookme room with no
 # photographs. It is not a replacement: Agoda resolves ~100% of hotels by geo,

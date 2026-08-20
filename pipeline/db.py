@@ -297,14 +297,78 @@ def existing_rooms(conn, common_hotel_id):
     already exists AND is still missing a picture or its dimensions, backfill
     whichever it's missing."
     """
+    size = "size_sqft" if has_size_sqft(conn) else "NULL AS size_sqft"
     with conn.cursor() as cur:
-        _sql(cur, "SELECT id, name, thumbnail, size_sqft, room_category_id "
-                  "FROM v2_rooms WHERE v2_common_hotel_id = %s", (common_hotel_id,))
+        _sql(cur, f"SELECT id, name, thumbnail, {size}, room_category_id "
+                  f"FROM v2_rooms WHERE v2_common_hotel_id = %s", (common_hotel_id,))
         return {r["name"].strip().lower():
                 {"id": r["id"], "has_image": bool(r["thumbnail"]),
-                 "has_size": r["size_sqft"] is not None,
+                 "has_size": True if size.startswith("NULL") else r["size_sqft"] is not None,
                  "has_category": r["room_category_id"] is not None}
                 for r in cur.fetchall()}
+
+
+_ROOM_COLS = None
+
+
+def room_columns(conn):
+    """The columns v2_rooms ACTUALLY has here, cached for the process.
+
+    UAT and prod are not schema-identical. `size_sqft` was added to UAT for
+    this project and does NOT exist on prod (verified 2026-08-20), so every
+    statement naming it -- the INSERT, the COALESCE backfill, the
+    existing-rooms read -- is a hard `Unknown column` error against production.
+    That would have failed EVERY publish, and it stayed invisible because the
+    prod run was interrupted during discovery and Phase 2 never ran.
+
+    Adapting is deliberate rather than requiring a prod migration: size is a
+    secondary display field, and refusing to run a whole imagery pipeline over
+    a missing optional column would be the wrong trade. Add the column to prod
+    and this starts populating it with no code change.
+    """
+    global _ROOM_COLS
+    if _ROOM_COLS is None:
+        with conn.cursor() as cur:
+            _sql(cur, "SHOW COLUMNS FROM v2_rooms")
+            _ROOM_COLS = {r["Field"] for r in cur.fetchall()}
+    return _ROOM_COLS
+
+
+def has_size_sqft(conn):
+    return "size_sqft" in room_columns(conn)
+
+
+def existing_rooms_bulk(conn, city_ids):
+    """{hotel_id: {name.lower(): {...}}} for a whole city, in ONE query.
+
+    Same shape existing_rooms() returns per hotel, fetched for the entire run
+    up front. Replaces one round trip per hotel with one round trip per run --
+    2,916 queries collapse to 1 on a Dubai prod run.
+
+    That is not only a wasted-work fix. Those per-hotel reads were the single
+    biggest source of lost work in production: measured 2026-08-19, 221 hotels
+    were abandoned mid-discovery because the connection dropped on exactly this
+    call, each one throwing away a completed Bookme probe ladder and Agoda
+    match. One read at startup cannot fail 221 times.
+    """
+    out = {}
+    if not city_ids:
+        return out
+    size = "r.size_sqft" if has_size_sqft(conn) else "NULL AS size_sqft"
+    with conn.cursor() as cur:
+        _sql(cur, f"SELECT r.v2_common_hotel_id AS hid, r.id, r.name, r.thumbnail, "
+                  f"{size}, r.room_category_id FROM v2_rooms r "
+                  f"JOIN v2_common_hotels h ON h.id = r.v2_common_hotel_id "
+                  f"WHERE h.city_id IN %s", (tuple(city_ids),))
+        for r in cur.fetchall():
+            out.setdefault(r["hid"], {})[(r["name"] or "").strip().lower()] = {
+                "id": r["id"], "has_image": bool(r["thumbnail"]),
+                # Where the column does not exist, "already has a size" is
+                # vacuously TRUE -- there is nothing to backfill into, so a
+                # room must never be routed through a write on its account.
+                "has_size": True if size.startswith("NULL") else r["size_sqft"] is not None,
+                "has_category": r["room_category_id"] is not None}
+    return out
 
 
 def _fill_empty_fields(cur, room_id, thumbnail=None, size_sqft=None,
@@ -342,21 +406,30 @@ def _fill_empty_fields(cur, room_id, thumbnail=None, size_sqft=None,
     # column is one this call has nothing for -- changing nothing but
     # `updated_at`, and reporting True as though something was gained. Caught by
     # this module's own guard test the moment room_category_id joined the SET.
-    conds = []
+    # Where v2_rooms has no size_sqft column (prod), the field is dropped from
+    # both the SET and the WHERE rather than the whole statement failing --
+    # every other backfill still lands. See room_columns().
+    with_size = "size_sqft" in (_ROOM_COLS or {"size_sqft"})
+    if not with_size:
+        size_sqft = None
+    conds, sets, args = [], ["thumbnail=COALESCE(thumbnail, %s)"], [thumbnail]
     if thumbnail is not None:
         conds.append("(thumbnail IS NULL OR thumbnail='')")
-    if size_sqft is not None:
-        conds.append("size_sqft IS NULL")
+    if with_size:
+        sets.append("size_sqft=COALESCE(size_sqft, %s)")
+        args.append(size_sqft)
+        if size_sqft is not None:
+            conds.append("size_sqft IS NULL")
+    sets.append("room_category_id=COALESCE(room_category_id, %s)")
+    args.append(category_id)
     if category_id is not None:
         conds.append("room_category_id IS NULL")
     if not conds:
         return False
     cur.execute(
-        "UPDATE v2_rooms SET thumbnail=COALESCE(thumbnail, %s), "
-        "size_sqft=COALESCE(size_sqft, %s), "
-        "room_category_id=COALESCE(room_category_id, %s), updated_at=NOW() "
+        f"UPDATE v2_rooms SET {', '.join(sets)}, updated_at=NOW() "
         f"WHERE id=%s AND ({' OR '.join(conds)})",
-        (thumbnail, size_sqft, category_id, room_id))
+        (*args, room_id))
     return cur.rowcount > 0
 
 
@@ -429,6 +502,7 @@ def _publish_locked(conn, hotel, rooms, existing):
     n_rooms = n_att = backfilled = 0
     claimed_this_run = set()
     skipped_existing = skipped_duplicate = 0
+    with_size = has_size_sqft(conn)      # prod lacks the column -- see room_columns()
     if existing is None:
         existing = existing_rooms(conn, hotel["id"])
     try:
@@ -446,15 +520,25 @@ def _publish_locked(conn, hotel, rooms, existing):
                 prior = existing.get(key)
 
                 if prior is None:
-                    _sql(cur,
-                         "INSERT INTO v2_rooms (hotel_id, v2_common_hotel_id, "
-                         "name, description, room_category_id, thumbnail, "
-                         "size_sqft, max_adults, max_children, created_at, "
-                         "updated_at) "
-                         "VALUES (0, %s, %s, NULL, %s, %s, %s, NULL, NULL, "
-                         "NOW(), NOW())",
-                         (hotel["id"], name, r.get("category_id"),
-                          r.get("thumbnail"), r.get("size_sqft")))
+                    if with_size:
+                        _sql(cur,
+                             "INSERT INTO v2_rooms (hotel_id, v2_common_hotel_id, "
+                             "name, description, room_category_id, thumbnail, "
+                             "size_sqft, max_adults, max_children, created_at, "
+                             "updated_at) "
+                             "VALUES (0, %s, %s, NULL, %s, %s, %s, NULL, NULL, "
+                             "NOW(), NOW())",
+                             (hotel["id"], name, r.get("category_id"),
+                              r.get("thumbnail"), r.get("size_sqft")))
+                    else:
+                        _sql(cur,
+                             "INSERT INTO v2_rooms (hotel_id, v2_common_hotel_id, "
+                             "name, description, room_category_id, thumbnail, "
+                             "max_adults, max_children, created_at, updated_at) "
+                             "VALUES (0, %s, %s, NULL, %s, %s, NULL, NULL, "
+                             "NOW(), NOW())",
+                             (hotel["id"], name, r.get("category_id"),
+                              r.get("thumbnail")))
                     room_id = cur.lastrowid
                     n_rooms += 1
                     images = r.get("images") or []

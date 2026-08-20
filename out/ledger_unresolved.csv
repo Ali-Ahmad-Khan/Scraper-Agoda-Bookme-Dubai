@@ -116,3 +116,67 @@ row_id,v2_common_hotel_id,city_id,slug,name,run_id,reason,detail,last_attempted_
 115,404,9658,al-waleed-palace-hotel-apartments-oud-metha,al waleed palace hotel apartments oud metha,20260819-150311,needs_image_backfill,3 room(s) published without a thumbnail this run,2026-08-19T15:10:31
 116,606,1280,hilton-dubai-jumeirah,hilton dubai jumeirah,20260819-163144,error,BrokenPipeError: [Errno 32] Broken pipe,2026-08-19T16:33:22
 117,613,1280,movenpick-hotel-jumeirah-lakes-towers-dubai,movenpick hotel jumeirah lakes towers dubai,20260819-164510,error,BrokenPipeError: [Errno 32] Broken pipe,2026-08-19T16:47:55
+118,453757,1280,higuests-vacation-homes-marina-tower,higuests vacation homes - marina tower,20260820-123315,no_agoda_match,rejected 'HiGuests Vacation Homes - Indigo Tower Apartments' name=89% strict=77% dist=1.18km same_city=True,2026-08-20T12:34:23
+119,453707,1280,hvr-the-palm-dubai,hvr the palm dubai,20260820-123315,no_agoda_match,no candidate above name threshold,2026-08-20T12:34:25
+120,453765,1280,key-view-address-jbr,key view - address jbr,20260820-123315,no_agoda_match,no candidate above name threshold,2026-08-20T12:34:30
+121,453823,1280,luton-vacation-homes-modern-lake-view-1br-mbl-residence-jumeirah-lake-towers,"luton vacation homes - modern & lake view 1br , mbl residence, jumeirah lake towers",20260820-123315,no_agoda_match,rejected 'Luton Vacation Homes -Grandeur Residence' name=87% strict=59% dist=4.01km same_city=True,2026-08-20T12:34:39
+122,453825,1280,luton-vacation-homes-sparkle-towers-dubai-marina-20ab-7,"luton vacation homes - sparkle towers, dubai marina 20ab 7",20260820-123315,no_agoda_match,rejected 'Luton Vacation Homes - Address Marina' name=87% strict=67% dist=1.05km same_city=True,2026-08-20T12:34:49
+123,453865,1280,maison-privee-five-residence,maison privee - five residence,20260820-123315,no_agoda_match,no candidate above name threshold,2026-08-20T12:34:53
+124,452555,1280,oyo-123-royal-mark-hotel-apartment,oyo 123 royal mark hotel apartment,20260820-123315,no_agoda_match,rejected 'OYO 123 Hotel Surya' name=81% strict=64% dist=5530.62km same_city=False,2026-08-20T12:35:01
+125,453974,1280,ron-ban,ron ban,20260820-123315,no_agoda_match,no candidate above name threshold,2026-08-20T12:35:07
+126,453914,1280,sleep-n-fly-sleep-lounge-c-gates-terminal-3-transit-only-403,"sleep n fly sleep lounge, c-gates terminal 3 transit only",20260820-123315,no_agoda_match,no candidate above name threshold,2026-08-20T12:35:11
+127,453008,1280,south-ridge-4,south ridge 4,20260820-123315,no_agoda_match,rejected 'South Ridge Inn' name=92% strict=86% dist=11403.38km same_city=False,2026-08-20T12:35:17
+128,453028,1280,tehran-hotel,tehran hotel,20260820-123315,no_agoda_match,rejected 'Tehran Boutique Hotel' name=100% strict=73% dist=1901.50km same_city=False,2026-08-20T12:35:23
+129,453994,1280,the-star-at-jw-marriott-marina,the star @ jw marriott marina,20260820-123315,no_agoda_match,no candidate above name threshold,2026-08-20T12:35:28
+130,453757,1280,higuests-vacation-homes-marina-tower,higuests vacation homes - marina tower,20260820-123655,no_agoda_match,rejected 'HiGuests Vacation Homes - Indigo Tower Apartments' name=89% strict=77% dist=1.18km same_city=True,2026-08-20T12:37:09
+131,453707,1280,hvr-the-palm-dubai,hvr the palm dubai,20260820-123655,no_agoda_match,no candidate above name threshold,2026-08-20T12:37:12
+132,453765,1280,key-view-address-jbr,key view - address jbr,20260820-123655,no_agoda_match,no candidate above name threshold,2026-08-20T12:37:17
+133,453823,1280,luton-vacation-homes-modern-lake-view-1br-mbl-residence-jumeirah-lake-towers,"luton vacation homes - modern & lake view 1br , mbl residence, jumeirah lake towers",20260820-123655,no_agoda_match,rejected 'Luton Vacation Homes -Grandeur Residence' name=87% strict=59% dist=4.01km same_city=True,2026-08-20T12:37:21
+134,453825,1280,luton-vacation-homes-sparkle-towers-dubai-marina-20ab-7,"luton vacation homes - sparkle towers, dubai marina 20ab 7",20260820-123655,no_agoda_match,rejected 'Luton Vacation Homes - Address Marina' name=87% strict=67% dist=1.05km same_city=True,2026-08-20T12:37:26
+135,453865,1280,maison-privee-five-residence,maison privee - five residence,20260820-123655,no_agoda_match,no candidate above name threshold,2026-08-20T12:37:29
+136,452555,1280,oyo-123-royal-mark-hotel-apartment,oyo 123 royal mark hotel apartment,20260820-123655,no_agoda_match,rejected 'OYO 123 Hotel Surya' name=81% strict=64% dist=5530.62km same_city=False,2026-08-20T12:37:34
+137,453974,1280,ron-ban,ron ban,20260820-123655,no_agoda_match,no candidate above name threshold,2026-08-20T12:37:39
+138,453914,1280,sleep-n-fly-sleep-lounge-c-gates-terminal-3-transit-only-403,"sleep n fly sleep lounge, c-gates terminal 3 transit only",20260820-123655,no_agoda_match,no candidate above name threshold,2026-08-20T12:37:44
+139,453008,1280,south-ridge-4,south ridge 4,20260820-123655,no_agoda_match,rejected 'South Ridge Inn' name=92% strict=86% dist=11403.38km same_city=False,2026-08-20T12:37:48
+140,453028,1280,tehran-hotel,tehran hotel,20260820-123655,no_agoda_match,rejected 'Tehran Boutique Hotel' name=100% strict=73% dist=1901.50km same_city=False,2026-08-20T12:37:53
+141,453994,1280,the-star-at-jw-marriott-marina,the star @ jw marriott marina,20260820-123655,no_agoda_match,no candidate above name threshold,2026-08-20T12:37:57
+142,451905,1280,al-raya-hotel-apartments-106,al raya hotel apartments,20260820-123819,no_agoda_match,rejected 'Al Raya Apartments' name=100% strict=86% dist=2557.31km same_city=False,2026-08-20T12:48:25
+143,451907,1280,al-waleed-palace-hotel-apartments-oud-metha,al waleed palace hotel apartments oud metha,20260820-123819,no_agoda_match,rejected 'Dunes Hotel Apartment Oud Metha' name=73% strict=70% dist=0.86km same_city=True,2026-08-20T12:48:35
+144,451919,1280,jood-palace-hotel-dubai-189,jood palace hotel dubai,20260820-123819,no_rooms_any_date,"agoda source=http, bookme rooms=0",2026-08-20T12:50:23
+145,451943,1280,lavender-hotel-al-nahda-dubai,lavender hotel al nahda dubai,20260820-123819,no_rooms_any_date,"agoda source=http, bookme rooms=0",2026-08-20T12:54:22
+146,451956,1280,copthorne-lakeview-executive-apartments-dubai-green-community-289,"copthorne lakeview executive apartments dubai, green community",20260820-123819,no_agoda_match,rejected 'Copthorne Hotel and Apartments Queenstown Lakeview' name=73% strict=58% dist=13752.29km same_city=False,2026-08-20T12:57:28
+147,451960,1280,time-palace-hotel,time palace hotel,20260820-123819,no_rooms_any_date,"agoda source=http, bookme rooms=0",2026-08-20T12:58:32
+148,451972,1280,emirates-concorde-hotel-apartments,emirates concorde hotel & apartments,20260820-123819,no_rooms_any_date,"agoda source=http, bookme rooms=0",2026-08-20T12:59:41
+149,451995,1280,panorama-bur-dubai-hotel,panorama bur dubai hotel,20260820-123819,no_rooms_any_date,"agoda source=http, bookme rooms=0",2026-08-20T13:04:14
+150,452010,1280,deira-suites-hotel-apartment-26,deira suites hotel apartment,20260820-123819,no_rooms_any_date,"agoda source=http, bookme rooms=0",2026-08-20T13:06:33
+151,452012,1280,al-bustan-residence-hotel-apartments,al bustan residence hotel apartments,20260820-123819,no_agoda_match,no candidate above name threshold,2026-08-20T13:06:37
+152,451905,1280,al-raya-hotel-apartments-106,al raya hotel apartments,20260820-142851,no_agoda_match,rejected 'Al Raya Apartments' name=100% strict=86% dist=2557.31km same_city=False,2026-08-20T14:51:59
+153,451907,1280,al-waleed-palace-hotel-apartments-oud-metha,al waleed palace hotel apartments oud metha,20260820-142851,no_agoda_match,rejected 'Dunes Hotel Apartment Oud Metha' name=73% strict=70% dist=0.86km same_city=True,2026-08-20T14:52:06
+154,451912,1280,pride-hotel-apartments,pride hotel apartments,20260820-142851,no_rooms_any_date,"agoda source=http, bookme rooms=0",2026-08-20T14:53:06
+155,451919,1280,jood-palace-hotel-dubai-189,jood palace hotel dubai,20260820-142851,no_rooms_any_date,"agoda source=http, bookme rooms=0",2026-08-20T14:57:42
+156,451905,1280,al-raya-hotel-apartments-106,al raya hotel apartments,20260820-150246,no_agoda_match,rejected 'Al Raya Apartments' name=100% strict=86% dist=2557.31km same_city=False,2026-08-20T15:06:53
+157,451907,1280,al-waleed-palace-hotel-apartments-oud-metha,al waleed palace hotel apartments oud metha,20260820-150246,no_agoda_match,rejected 'Dunes Hotel Apartment Oud Metha' name=73% strict=70% dist=0.86km same_city=True,2026-08-20T15:06:58
+158,451912,1280,pride-hotel-apartments,pride hotel apartments,20260820-150246,no_rooms_any_date,"agoda source=http, bookme rooms=0",2026-08-20T15:07:46
+159,451919,1280,jood-palace-hotel-dubai-189,jood palace hotel dubai,20260820-150246,no_rooms_any_date,"agoda source=http, bookme rooms=0",2026-08-20T15:10:02
+160,451905,1280,al-raya-hotel-apartments-106,al raya hotel apartments,20260820-161210,no_agoda_match,rejected 'Al Raya Apartments' name=100% strict=86% dist=2557.31km same_city=False,2026-08-20T16:25:25
+161,451907,1280,al-waleed-palace-hotel-apartments-oud-metha,al waleed palace hotel apartments oud metha,20260820-161210,no_agoda_match,rejected 'Dunes Hotel Apartment Oud Metha' name=73% strict=70% dist=0.86km same_city=True,2026-08-20T16:25:30
+162,451919,1280,jood-palace-hotel-dubai-189,jood palace hotel dubai,20260820-161210,no_rooms_any_date,"agoda source=http, bookme rooms=0",2026-08-20T16:27:09
+163,451943,1280,lavender-hotel-al-nahda-dubai,lavender hotel al nahda dubai,20260820-161210,no_rooms_any_date,"agoda source=http, bookme rooms=0",2026-08-20T16:30:17
+164,451956,1280,copthorne-lakeview-executive-apartments-dubai-green-community-289,"copthorne lakeview executive apartments dubai, green community",20260820-161210,no_agoda_match,rejected 'Copthorne Hotel and Apartments Queenstown Lakeview' name=73% strict=58% dist=13752.29km same_city=False,2026-08-20T16:36:15
+165,451972,1280,emirates-concorde-hotel-apartments,emirates concorde hotel & apartments,20260820-161210,no_rooms_any_date,"agoda source=http, bookme rooms=0",2026-08-20T16:39:52
+166,451995,1280,panorama-bur-dubai-hotel,panorama bur dubai hotel,20260820-161210,no_rooms_any_date,"agoda source=http, bookme rooms=0",2026-08-20T16:44:18
+167,452010,1280,deira-suites-hotel-apartment-26,deira suites hotel apartment,20260820-161210,no_rooms_any_date,"agoda source=http, bookme rooms=0",2026-08-20T16:48:06
+168,452012,1280,al-bustan-residence-hotel-apartments,al bustan residence hotel apartments,20260820-161210,no_agoda_match,no candidate above name threshold,2026-08-20T16:48:10
+169,452057,1280,rush-inn-hotel,rush inn hotel,20260820-161210,no_rooms_any_date,"agoda source=http, bookme rooms=0",2026-08-20T17:07:36
+170,452067,1280,delmon-palace-hotel,delmon palace hotel,20260820-161210,no_agoda_match,rejected 'LE PARADISE PALACE HOTEL Deira Dubai Al Rigga' name=77% strict=47% dist=0.35km same_city=True,2026-08-20T17:14:04
+171,452076,1280,the-address-montgomerie-dubai,the address montgomerie dubai,20260820-161210,no_agoda_match,rejected 'The Address Cork' name=81% strict=62% dist=6052.20km same_city=False,2026-08-20T17:35:27
+172,452082,1280,ramee-hotel-apartments-998,ramee hotel apartments,20260820-161210,no_rooms_any_date,"agoda source=http, bookme rooms=0",2026-08-20T17:39:09
+173,452083,1280,burjuman-arjaan-by-rotana-dubai,burjuman arjaan by rotana dubai,20260820-161210,no_rooms_any_date,"agoda source=http, bookme rooms=0",2026-08-20T17:40:00
+174,452093,1280,jumeirah-burj-al-arab-dubai-775,jumeirah burj al arab dubai,20260820-161210,no_rooms_any_date,"agoda source=http, bookme rooms=0",2026-08-20T17:43:49
+175,452124,1280,the-bristol-hotel-dubai-195,the bristol hotel dubai,20260820-161210,no_agoda_match,rejected 'THE BRISTOL INN HOTEL' name=89% strict=77% dist=0.91km same_city=True,2026-08-20T17:47:03
+176,452145,1280,jumeirah-creekside-dubai-579,jumeirah creekside dubai,20260820-161210,no_agoda_match,no candidate above name threshold,2026-08-20T17:48:50
+177,452153,1280,avari-hotel-apartments,avari hotel apartments,20260820-161210,no_agoda_match,"rejected ""Avari Apartments - Gray's Collection"" name=84% strict=68% dist=5475.37km same_city=False",2026-08-20T17:49:35
+178,452177,1280,mercure-hotel-suites-apartments-dubai-barsha-heights,mercure hotel suites & apartments dubai barsha heights,20260820-161210,no_agoda_match,no candidate above name threshold,2026-08-20T17:50:12
+179,452184,1280,time-crystal-hotel-apartments,time crystal hotel apartments,20260820-161210,no_rooms_any_date,"agoda source=http, bookme rooms=0",2026-08-20T17:51:11
+180,452201,1280,downtown-hotel-267,downtown hotel,20260820-161210,no_agoda_match,rejected 'Millennium Plaza Downtown Hotel Dubai' name=100% strict=55% dist=6.03km same_city=True,2026-08-20T17:51:52
+181,452071,1280,pearl-residence-hotel-apartments,pearl residence hotel apartments,20260820-161210,no_agoda_match,rejected 'North Pearl Residence Apartments' name=91% strict=91% dist=2258.12km same_city=False,2026-08-20T17:53:56

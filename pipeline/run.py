@@ -24,7 +24,6 @@ the hotel in flight finishes and commits before the process exits; re-running
 resumes at the first hotel the ledger does not know about.
 """
 import argparse
-import asyncio
 import collections
 import csv
 import datetime
@@ -53,14 +52,18 @@ sys.stdout.reconfigure(line_buffering=True)
 OUT = os.path.join(config.ROOT, "out")
 CACHE = os.path.join(OUT, "cache")
 
-# Circuit breaker for "Agoda stopped answering". Counted in HOTELS, not
-# requests, because that is the unit an operator watches and the unit the
-# damage is measured in. Rotate first (a fresh session sometimes clears a
-# soft block), abort only once it is clearly not transient -- by which point
-# agoda.py's own escalating cooldown has already spent 420+840+1680s standing
-# down, so reaching the abort means roughly an hour of genuine unavailability.
+# "Agoda stopped answering", counted in HOTELS -- the unit an operator watches
+# and the unit the damage is measured in.
+#
+# There is deliberately NO ABORT. An earlier version stopped the run at 8
+# consecutive unreachable hotels; that was the wrong instinct. The pipeline's
+# job is to work through a blockade, not to detect one and quit, and an
+# unreachable hotel is now REQUEUED rather than consumed, so an outage costs
+# time instead of coverage. ROTATE triggers a fresh session identity;
+# DEGRADED is a reporting threshold only -- it marks the run as having run
+# through a sustained outage so nobody mistakes a thin result for a real one.
 AGODA_SICK_ROTATE = 3
-AGODA_SICK_ABORT = 8
+AGODA_SICK_DEGRADED = 8
 
 # Coordinates are the strongest evidence when both sides have good ones -- but
 # a wholesale feed's coordinates are sometimes kilometres off (Raha Grand Hotel:
@@ -765,14 +768,37 @@ def match_hotel(s, h, check_in, check_out, city=None, destination=None,
 
     bn = match.norm(plain)
     cands, errs = {}, []
+
+    def _strong_here(c):
+        """A strong name match THAT IS IN THE TARGET CITY.
+
+        The city qualifier is the whole point. Stopping on any strong name
+        match let a global namesake suppress the disambiguating "<name> <city>"
+        query -- and namesakes are the norm, not the exception: measured live,
+        `royal plaza` returns 5 candidates all scoring 100%, NONE of them in
+        Dubai, while `royal plaza Dubai` returns `Royal Plaza Hotel Apartments`
+        at 100% in Dubai. The pipeline was rejecting the far one at 5,948km and
+        recording the hotel as absent from Agoda, having never asked the
+        question that would have found it.
+
+        Measured over 20 real `no_agoda_match` hotels: 3 found a Dubai
+        candidate under the old rule, 8 under this one.
+
+        Costs nothing in the common case -- a correct same-city match still
+        stops immediately. The extra query is issued only when the strong match
+        is somewhere else, which is exactly when it is needed.
+        """
+        if match.score(bn, match.norm(c["agoda_name"])) < NAME_STRONG:
+            return False
+        return city is None or c.get("city_id") == city
+
     for q in queries:
         try:
             for c in agoda.suggest(s, q):
                 cands.setdefault(c["agoda_id"], c)
         except Exception as e:
             errs.append(str(e))
-        if any(match.score(bn, match.norm(c["agoda_name"])) >= NAME_STRONG
-               for c in cands.values()):
+        if any(_strong_here(c) for c in cands.values()):
             break
     if not cands:
         # `unreachable` separates "we never got to ask" from "we asked and this
@@ -784,13 +810,27 @@ def match_hotel(s, h, check_in, check_out, city=None, destination=None,
             return {"reason": f"suggest failed: {errs[0]}", "unreachable": True}
         return {"reason": "no agoda suggestion"}
 
-    ranked = sorted(cands.values(),
-                    key=lambda c: -match.score(bn, match.norm(c["agoda_name"])))
+    # Filter to viable candidates FIRST, then rank same-city ahead of name
+    # score. Two things this fixes at once:
+    #
+    #   * the top_n budget is spent on candidates that can actually win. Name
+    #     score alone put `The Bristol Hotel` (100%, city 3068, 13,518km away)
+    #     ahead of `The Bristol Hotel (formerly JW Marriott...)` (85%, Dubai) --
+    #     the right hotel could be ranked out of the fetch budget entirely.
+    #   * filtering before the slice removes the old `break`-on-NAME_OK, which
+    #     was only correct while the list was sorted descending by name. It is
+    #     no longer, so a break there would silently drop good candidates.
+    viable = [c for c in cands.values()
+              if match.score(bn, match.norm(c["agoda_name"])) >= NAME_OK]
+    ranked = sorted(
+        viable,
+        key=lambda c: (0 if (city is not None and c.get("city_id") == city) else 1,
+                       -match.score(bn, match.norm(c["agoda_name"]))))
     best, best_reject = None, None
+    fetch_failed = considered = 0
     for c in ranked[:top_n]:
         ns = match.score(bn, match.norm(c["agoda_name"]))
-        if ns < NAME_OK:
-            break                                   # ranked desc, rest are worse
+        considered += 1
         # Everything decided here -- coordinates, city, isNHA -- is date-invariant
         # property metadata, so a candidate verified by an earlier run answers
         # again for free. The payload is 803KB to reach a 27-byte verdict, and
@@ -800,6 +840,12 @@ def match_hotel(s, h, check_in, check_out, city=None, destination=None,
             try:
                 p = agoda.property_rooms(s, c["agoda_id"], check_in, check_out)
             except Exception as e:
+                # Counted, not just recorded. If EVERY candidate we could
+                # afford to check failed to fetch, this hotel was never
+                # actually assessed -- and returning a plain rejection would
+                # write "not on Agoda", a permanent-looking fact produced by a
+                # transient block. See the unreachable check below.
+                fetch_failed += 1
                 best_reject = best_reject or f"agoda fetch failed: {e}"
                 continue
             if p:
@@ -829,6 +875,18 @@ def match_hotel(s, h, check_in, check_out, city=None, destination=None,
             best = (key, c, p, ns, d, conf)
 
     if best is None:
+        # "We could not ask" vs "we asked and it is not there" -- the same
+        # empty result, opposite meanings. If every candidate we looked at
+        # failed to fetch, this is the former and must be retried, not filed.
+        if considered and fetch_failed >= considered:
+            return {"reason": f"every candidate fetch failed ({fetch_failed}): "
+                              f"{best_reject}", "unreachable": True}
+        # Suggest itself partly failed AND nothing survived -- we may simply
+        # never have seen the right candidate.
+        if errs and not viable:
+            return {"reason": f"suggest partly failed ({errs[0]}) and no "
+                              f"candidate cleared the name floor",
+                    "unreachable": True}
         return {"reason": best_reject or "no candidate above name threshold"}
     _, c, p, ns, d, conf = best
     return {"agoda_id": p["agoda_id"],
@@ -882,17 +940,18 @@ def agoda_rooms(ags, m, country_iso, destination):
         # The HTTP grid can come back empty for a property the website renders
         # perfectly well; the browser fallback reads the page's own XHR off the
         # wire rather than scraping the DOM.
-        # ponytail: one chromium launch per blind hotel (~4s) instead of one
-        # session for all of them, which is the price of publishing hotel by
-        # hotel so a crash cannot lose a day's work. If blind hotels turn out
-        # to be common, collect them and run a second batched pass at the end.
+        # ONE chromium for the whole run, reused across hotels -- see
+        # agoda_browser._session. This used to be `asyncio.run(...)` per hotel,
+        # which built and destroyed a browser every time (89 of them in the
+        # first production run) precisely because the loop it was bound to was
+        # thrown away each call.
         check_in, check_out = stay()
         try:
-            rec = asyncio.run(agoda_browser.fetch_rooms(
+            rec = agoda_browser.fetch_rooms_sync(
                 [{"agoda_id": hid, "agoda_name": m["agoda_name"],
                   "slug": m.get("slug") or cached.get("slug"),
                   "city": destination}],
-                check_in, check_out, country_code=country_iso))
+                check_in, check_out, country_code=country_iso)
         except Exception as e:
             print(f"    browser fallback failed ({type(e).__name__}: {e})")
             rec = {}
@@ -1649,8 +1708,96 @@ def selftest():
     _selftest_mapping(cats)
     _selftest_booking_fill(cats)
     _selftest_agoda_breaker()
+    _selftest_city_aware_match()
+    _selftest_schema_adaptive()
     _selftest_plan_checkpoint(cats)
     _selftest_cli_targeting()
+
+
+def _selftest_city_aware_match():
+    """The early break must be CITY-aware, and ranking must prefer the city.
+
+    Guards a measured production failure: `royal plaza` returns five
+    candidates all scoring 100%, none in Dubai. The old rule stopped querying
+    on any strong name match, so the disambiguating "<name> Dubai" query was
+    never issued and the hotel was filed as absent from Agoda. Measured over 20
+    real failing hotels, the city-aware rule took Dubai candidates from 3 to 8.
+
+    Agoda is stubbed: this asserts the DECISION, not the network.
+    """
+    DUBAI, ELSEWHERE = 2994, 3068
+    asked = []
+
+    def fake_suggest(_s, q):
+        asked.append(q)
+        if q.lower().endswith("dubai"):
+            return [{"agoda_id": 1, "agoda_name": "Royal Plaza Hotel Apartments",
+                     "city_id": DUBAI}]
+        return [{"agoda_id": 2, "agoda_name": "Royal Plaza", "city_id": ELSEWHERE}]
+
+    real = agoda.suggest
+    try:
+        agoda.suggest = fake_suggest
+        h = {"name": "royal plaza", "lat": 25.26, "lon": 55.32, "address": None}
+        # property_rooms is never reached: with no fetch stub it raises, and the
+        # point here is purely which QUERIES were issued and how they ranked.
+        match_hotel(None, h, "2026-09-01", "2026-09-02", city=DUBAI,
+                    destination="Dubai")
+        assert any(q.lower().endswith("dubai") for q in asked), (
+            f"the disambiguating city query was never issued: {asked} -- a "
+            f"global namesake suppressed it, which is the production bug")
+
+        # ...and with the SAME strong match already in the target city, the
+        # extra query must NOT be issued -- the fix must cost nothing normally.
+        asked.clear()
+
+        def city_first(_s, q):
+            asked.append(q)
+            return [{"agoda_id": 1, "agoda_name": "Royal Plaza", "city_id": DUBAI}]
+        agoda.suggest = city_first
+        match_hotel(None, h, "2026-09-01", "2026-09-02", city=DUBAI,
+                    destination="Dubai")
+        assert not any(q.lower().endswith("dubai") for q in asked), (
+            f"an extra query was issued despite a strong SAME-CITY match: {asked}")
+    finally:
+        agoda.suggest = real
+    print("OK: match stops only on a same-city strong name match -- issues the "
+          "city query when the namesake is elsewhere, and not when it isn't")
+
+
+def _selftest_schema_adaptive():
+    """v2_rooms without size_sqft (production) must still be writable.
+
+    Found 2026-08-20: prod has no `size_sqft` column, so every statement naming
+    it is a hard `Unknown column` error. Phase 2 would have failed on EVERY
+    hotel; it stayed invisible only because the prod run was interrupted during
+    discovery. Offline, with a fake cursor -- no connection, no writes.
+    """
+    class FakeCur:
+        def __init__(self):
+            self.sql = None
+            self.args = None
+            self.rowcount = 1
+
+        def execute(self, sql, args=None):
+            self.sql, self.args = sql, args
+
+    saved = db._ROOM_COLS
+    try:
+        for cols, has in [({"thumbnail", "size_sqft", "room_category_id"}, True),
+                          ({"thumbnail", "room_category_id"}, False)]:
+            db._ROOM_COLS = cols
+            c = FakeCur()
+            db._fill_empty_fields(c, 42, thumbnail="t.jpg", size_sqft=280,
+                                  category_id=7)
+            assert ("size_sqft" in c.sql) is has, (
+                f"size_sqft handling wrong for schema {cols}: {c.sql}")
+            assert "room_category_id=COALESCE" in c.sql, c.sql
+            # a call with nothing to offer must stay a no-op in both schemas
+            assert db._fill_empty_fields(FakeCur(), 42) is False
+    finally:
+        db._ROOM_COLS = saved
+    print("OK: v2_rooms writes adapt to a schema with or without size_sqft")
 
 
 def _selftest_plan_checkpoint(cats):
@@ -1882,6 +2029,97 @@ def _selftest_agoda_breaker():
         agoda._consecutive, agoda._cooldowns = real_consec, real_cools
     print(f"OK: agoda stand-down escalates {[int(s) for s in slept]}s, "
           f"resets on success, caps at {agoda.COOLDOWN_MAX}s")
+
+    # -- the SUSTAINED RATE, which is what actually gets us unblocked --------
+    # Sleeping alone was measured NOT to recover a block (six consecutive
+    # failed cooldowns in production, "no successful call since cooldown #1").
+    # The rate must rise on a throttle and must NOT snap back on the first
+    # success, or the run walks straight into the same limiter again.
+    real_sleep = time.sleep
+    saved = (agoda._interval, agoda._ok_streak, agoda._consecutive, agoda._cooldowns)
+    try:
+        time.sleep = lambda *_: None
+        agoda._interval, agoda._ok_streak = agoda.MIN_INTERVAL, 0
+        agoda._consecutive = agoda._cooldowns = 0
+        for _ in range(agoda.CONSECUTIVE_LIMIT):
+            agoda._note(False, log=lambda *_: None)
+        raised = agoda._interval
+        assert raised > agoda.MIN_INTERVAL, (
+            f"a throttle did not slow the sustained rate: {raised}s -- sleeping "
+            f"without slowing is what failed in production")
+        agoda._note(True)                       # ONE success
+        assert agoda._interval == raised, (
+            "the rate snapped back after a single success -- that is how a run "
+            "re-enters the block it just escaped")
+        for _ in range(agoda.RECOVER_AFTER):    # sustained success
+            agoda._note(True, log=lambda *_: None)
+        assert agoda._interval < raised, "rate never eased after sustained success"
+        assert agoda._interval >= agoda.MIN_INTERVAL, "eased below the floor"
+
+        # and the ceiling binds, so a long outage cannot pace us into a stall
+        for _ in range(agoda.CONSECUTIVE_LIMIT * 12):
+            agoda._note(False, log=lambda *_: None)
+        assert agoda._interval <= agoda.MAX_INTERVAL, agoda._interval
+    finally:
+        time.sleep = real_sleep
+        (agoda._interval, agoda._ok_streak,
+         agoda._consecutive, agoda._cooldowns) = saved
+    print(f"OK: agoda sustained pace rises on throttle, holds through one "
+          f"success, eases only after {agoda.RECOVER_AFTER}, caps at "
+          f"{agoda.MAX_INTERVAL}s")
+
+    # -- PREVENTION: jitter, per-call cost, session breaks ------------------
+    # These exist to avoid tripping the limiter at all, rather than to recover
+    # once it has. Asserted on the numbers, because each one is a trade against
+    # wall-clock on a 43,000-request run and a silent regression here is either
+    # a metronome signature or hours of needless delay.
+    real_sleep, slept = time.sleep, []
+    saved = (agoda._interval, agoda._since_break, agoda.SESSION_BREAK_EVERY)
+    try:
+        time.sleep = slept.append
+        agoda._interval = agoda.MIN_INTERVAL
+        agoda._since_break = 0
+        agoda.SESSION_BREAK_EVERY = 0        # isolate jitter from breaks
+        # time.sleep is stubbed, so each _pace() returns instantly and stamps
+        # _last_request = now -- the next call therefore sees ~0 elapsed and
+        # asks for a full jittered interval. That is exactly what we want to
+        # sample.
+        agoda._pace()
+        for _ in range(30):
+            agoda._pace()
+        waits = [w for w in slept if w > 0]
+        assert waits, "the pacer never waited at all"
+        assert min(waits) >= agoda.MIN_INTERVAL * 0.99, (
+            f"jitter went BELOW the floor ({min(waits):.2f}s) -- jitter must "
+            f"only ever ADD delay, never make us more aggressive")
+        assert max(waits) - min(waits) > 0.05, (
+            "no variance -- a perfectly uniform gap across tens of thousands "
+            "of requests is itself the fingerprint this exists to remove")
+        assert max(waits) <= agoda.MIN_INTERVAL * agoda.JITTER * 1.01, waits
+
+        # a costly call (a browser page load) charges MULTIPLE slots, or the
+        # browser fallback is an unmetered hole in the rate discipline
+        slept.clear()
+        agoda._pace(cost=8)
+        assert len([w for w in slept if w > 0]) >= 7, (
+            f"cost=8 did not charge 8 slots: {slept} -- a browser page load is "
+            f"dozens of requests, not one")
+
+        # and the session break must actually fire on schedule
+        slept.clear()
+        agoda.SESSION_BREAK_EVERY, agoda._since_break = 5, 0
+        for _ in range(5):
+            agoda._pace()
+        assert any(w >= agoda.SESSION_BREAK_S * 0.7 for w in slept), (
+            f"no session break after {agoda.SESSION_BREAK_EVERY} requests: {slept}")
+    finally:
+        time.sleep = real_sleep
+        (agoda._interval, agoda._since_break,
+         agoda.SESSION_BREAK_EVERY) = saved
+        agoda._last_request = 0.0
+    print(f"OK: agoda pacing is jittered (never below {agoda.MIN_INTERVAL}s), "
+          f"charges multi-slot costs, and breaks every "
+          f"{agoda.SESSION_BREAK_EVERY} requests")
 
 
 def _selftest_booking_fill(cats):
@@ -2862,8 +3100,8 @@ def _print_human_summary(counts, hotels_attempted, destination, rooms_from):
     than as two counters that quietly stopped agreeing.
     """
     total = hotels_attempted
-    via_agoda = counts["hotels_done"] - counts["hotels_published_without_agoda"]
-    agoda_blind = counts["hotels_published_without_agoda"]
+    via_agoda = counts["hotels_done"] - counts["hotels_agoda_blind_done"]
+    agoda_blind = counts["hotels_agoda_blind_done"]
     published = via_agoda + agoda_blind
     no_listing = (counts["hotels_no_agoda_match"] + counts["hotels_agoda_unreachable"]
                  - agoda_blind)
@@ -3201,6 +3439,11 @@ def main(argv=None):
         here = {r["id"] for r in all_hotels}
         todo = all_hotels
         total_in_city = len(all_hotels)
+        # Bound on THIS branch too: the manifest reads them unconditionally,
+        # and leaving them to the city branch alone crashed the whole report
+        # with UnboundLocalError at the very end of a --slugs run -- after all
+        # the work was done. Nothing is skipped here by definition.
+        skipped_here = backfill_here = 0
         print(f"hotels: {len(todo)} explicit hotel(s), ledger freshness "
              f"ignored (named hotels always run)")
     else:
@@ -3269,7 +3512,10 @@ def main(argv=None):
     # phases. `aborted_immediately` is declared here, once, and shared by both
     # try/except sites below so either one lands on the identical report path.
     aborted_immediately = False
-    agoda_dead = False          # set by the circuit breaker, reported explicitly
+    # Reporting flag only -- never aborts the run. Set after discovery if
+    # Agoda was still dark at the end, so a thin result is never mistaken
+    # for a complete one.
+    agoda_dead = False
     try:
         # What was ASKED for, kept separate from what actually ran. A degraded
         # run that recorded only its degraded mode would look identical,
@@ -3303,6 +3549,41 @@ def main(argv=None):
                     print(f"  NOTE: {len(no_slug)} hotel(s) have no slug in the "
                           f"database and cannot be looked up on Bookme; Agoda still "
                           f"covers them.")
+                # ---- environment sanity, BEFORE hours of work -----------------
+                # D-3's failure mode is silent: prod slugs carry a `-<digits>`
+                # suffix that UAT does not, so a crossed pair answers HTTP 500
+                # ("permanently unsellable") for every suffixed hotel and the
+                # pipeline dutifully records live hotels as dead. Verified live
+                # 2026-08-20: `fairmont-dubai-830` -> Unavailable on UAT, 31
+                # rooms on prod.
+                #
+                # Five slugs is enough to tell a namespace mismatch from a few
+                # genuinely dead properties, and it costs ~5 requests against a
+                # run measured in tens of thousands.
+                probe_slugs = [h["slug"] for h in todo
+                               if (h.get("slug") or "").strip()][:5]
+                if probe_slugs:
+                    # stay() called here, not the run's `check_in` -- that is
+                    # bound later, below the harvest.
+                    _ci, _co = stay()
+                    dead = 0
+                    for sl in probe_slugs:
+                        try:
+                            bookme.availability(bs, sl, _ci, _co,
+                                                adults=config.ADULTS)
+                        except bookme.Unavailable:
+                            dead += 1
+                        except Exception:
+                            pass          # transport noise is not a mismatch
+                    if dead == len(probe_slugs):
+                        raise SystemExit(
+                            f"\nREFUSING TO RUN: all {dead} sampled slugs came back "
+                            f"'permanently unsellable' from {bookme.api_base()}.\n"
+                            f"That is the signature of a CROSSED ENVIRONMENT (D-3), "
+                            f"not of {dead} dead hotels -- the database is "
+                            f"{os.getenv('MYSQL_DATABASE')!r}.\n"
+                            f"Point BOOKME_API_BASE at the API matching that "
+                            f"database and re-run. Sampled: {probe_slugs}")
                 print(f"bookme: probing {len(todo) - len(no_slug)} hotel(s) by slug, "
                       f"{len(probe_shapes(config.ROOM_PROBES))} base shapes x "
                       f"{config.ROOM_PROBE_WORKERS} workers")
@@ -3363,7 +3644,8 @@ def main(argv=None):
               # Without this, the terminal-outcome buckets printed at the end
               # of a run double-count: a hotel can be BOTH "no_agoda_match" AND
               # "hotels_done" at once, and nothing said so.
-              "hotels_published_without_agoda": 0}
+              "hotels_agoda_blind_attempted": 0,
+              "hotels_agoda_blind_done": 0}
     # hotels_mapped vs hotels_done: discovery succeeding and the DB commit
     # succeeding are different claims, now genuinely separated by phase --
     # hotels_mapped is set in Phase 1 (this hotel produced a plan, whether or
@@ -3469,6 +3751,30 @@ def main(argv=None):
     # a crash here loses at most the hotel in flight and a re-invocation skips
     # straight past anything already discovered.
     # ======================================================================
+    # Every hotel's already-published rooms, in ONE query, before discovery
+    # starts. This replaces a per-hotel read that was the single largest source
+    # of lost work in production: measured 2026-08-19, 221 hotels were abandoned
+    # mid-discovery because the connection dropped on exactly that call, each
+    # one throwing away a completed Bookme ladder and Agoda match.
+    #
+    # Non-fatal by construction. It only SCOPES the Booking gap-fill (skip
+    # rooms that already have a picture); Phase 2 re-reads the truth fresh
+    # before writing anything. So if it fails, discovery proceeds with an empty
+    # map -- Booking may ask about a few rooms it needn't have, which is a cost,
+    # not an error. Nothing about correctness depends on it.
+    existing_by_hotel = {}
+    if not a.dry_run:
+        try:
+            existing_by_hotel, conn = db.with_retry(
+                conn, lambda c: db.existing_rooms_bulk(c, city_ids),
+                what="existing-room prefetch")
+            print(f"existing rooms: {sum(len(v) for v in existing_by_hotel.values())} "
+                  f"across {len(existing_by_hotel)} hotel(s) already in the database")
+        except Exception as e:
+            print(f"  existing-room prefetch failed ({type(e).__name__}); "
+                  f"continuing without it -- booking may re-check a few rooms "
+                  f"that already have a picture, nothing else changes")
+
     plan_scope = _plan_scope(todo)
     planned_rows, planned_ids = _load_plan(plan_scope)
     if planned_ids:
@@ -3486,8 +3792,40 @@ def main(argv=None):
         # read) earns one retry at the end of THIS phase, not an abandoned
         # hotel that already paid for its Bookme probes and Agoda ladder.
         work1 = [h for h in todo if h["id"] not in planned_ids]
-        deferred1 = []
+        deferred1, requeued = [], []
         agoda_sick = 0                 # consecutive hotels Agoda could not be ASKED about
+
+        def _breaker(sick):
+            """React to Agoda going dark -- by WORKING THROUGH it, not quitting.
+
+            Deliberately has no abort. Production evidence (2026-08-19) is that
+            sleeping does not recover a block: six escalating cooldowns fired
+            back to back, every one reporting "no successful call since cooldown
+            #1". So the response that matters is behavioural, not temporal --
+            rotate to a fresh session identity, and let agoda.py's adaptive
+            pacer hold the slower sustained rate it has already backed off to.
+
+            The run does not need an abort any more either: an unreachable
+            hotel is REQUEUED rather than consumed, so an outage no longer
+            burns through the hotel list writing unearned zeros. It simply
+            makes progress slowly, and every hotel it could not ask gets asked
+            again at the end.
+            """
+            nonlocal ags
+            if sick and sick % AGODA_SICK_ROTATE == 0:
+                ags = agoda.session()          # fresh cookie jar AND user-agent
+                # The browser presents its own identity, so rotating only the
+                # HTTP session would leave half of our traffic still wearing
+                # the one that just got blocked.
+                agoda_browser.rotate()
+                cd, nxt = agoda.health()
+                pace, floor, ceil = agoda.pace_state()
+                print(f"\n  !! AGODA UNREACHABLE for {sick} hotels in a row "
+                      f"({cd} cooldown(s), next {nxt}s). Rotated session "
+                      f"identity; sustained pace now {pace:.1f}s "
+                      f"(floor {floor}, ceiling {ceil}). These hotels are "
+                      f"requeued, not written off -- Booking still covers any "
+                      f"with Bookme rooms.\n")
         for i, h in enumerate(work1, 1):
             # Set on every iteration, not read back from `i` after the loop:
             # work1 can be EMPTY (every hotel in `todo` already check-pointed
@@ -3524,27 +3862,52 @@ def main(argv=None):
                     reason = m.get("reason", "")
                     # An outage and a genuine non-listing are recorded under
                     # DIFFERENT reasons, and only the outage feeds the breaker.
-                    kind = ("agoda_unreachable" if m.get("unreachable")
-                            else "no_agoda_match")
-                    counts[f"hotels_{kind}"] += 1
-                    revisit_row(kind, reason)
-                    led.mark_unresolved(h, run_id, kind, reason)
-                    if m.get("unreachable"):
+                    unreachable = bool(m.get("unreachable"))
+                    if unreachable:
                         agoda_sick += 1
+                        # NOT recorded as a result yet. "We could not ask" is an
+                        # open question, and filing it as an answer is the
+                        # unearned zero this pipeline exists to refuse. Requeue
+                        # it ONCE, to the end of discovery, by which time the
+                        # adaptive pacer has slowed and the session has rotated.
+                        # Only a hotel that fails the RETRY too gets written up.
+                        if h["id"] not in {x["id"] for x in requeued}:
+                            requeued.append(h)
+                            work1.append(h)
+                            print(f"{tag} agoda unreachable ({reason[:40]}) -- "
+                                  f"requeued, will re-ask at end of discovery")
+                            _breaker(agoda_sick)
+                            continue
+                        counts["hotels_agoda_unreachable"] += 1
+                        revisit_row("agoda_unreachable", reason)
+                        led.mark_unresolved(h, run_id, "agoda_unreachable", reason)
                     else:
+                        # Only a genuine, ASKED-AND-ANSWERED negative clears the
+                        # sickness counter. A name-threshold rejection during an
+                        # outage used to reset it, which is why the breaker never
+                        # fired across 3.75 hours of cooldowns in production.
                         agoda_sick = 0
+                        counts["hotels_no_agoda_match"] += 1
+                        revisit_row("no_agoda_match", reason)
+                        led.mark_unresolved(h, run_id, "no_agoda_match", reason)
                     # NOT a `continue`. Agoda failing is precisely when the
                     # second source is most valuable -- Booking resolves the
                     # hotel independently, so the Bookme rooms we already
                     # harvested can still be published WITH photographs instead
                     # of the hotel being skipped outright.
-                    ag_rooms, source = [], kind
+                    ag_rooms, source = [], "no_agoda_match"
                     if not bm_rooms:
-                        print(f"{tag} {kind.replace('_', ' ')}, no bookme "
-                              f"rooms either: {reason[:44]}")
+                        print(f"{tag} no agoda match, no bookme rooms either: "
+                              f"{reason[:44]}")
+                        # The breaker runs BEFORE this continue. It used to sit
+                        # after it, which made it unreachable on the single most
+                        # common path during an outage -- 207 of the hotels in
+                        # the production run took exactly this branch, and the
+                        # breaker was never once evaluated.
+                        _breaker(agoda_sick)
                         continue
-                    counts["hotels_published_without_agoda"] += 1
-                    print(f"{tag} {kind.replace('_', ' ')} ({reason[:34]}) -- "
+                    counts["hotels_agoda_blind_attempted"] += 1
+                    print(f"{tag} no agoda match ({reason[:34]}) -- "
                           f"booking takes over for {len(bm_rooms)} room(s)")
                 else:
                     agoda_sick = 0
@@ -3558,42 +3921,17 @@ def main(argv=None):
                               f"{len(probe_log)} probes")
                         continue
 
-                # ---- circuit breaker -----------------------------------------
-                # The failure this exists for: Agoda blocked us mid-run and the
-                # pipeline carried on for 12 more hotels writing "no agoda
-                # match" -- looking healthy in the log while producing nothing.
-                # An unattended city run could burn hours that way.
-                if agoda_sick and agoda_sick % AGODA_SICK_ROTATE == 0:
-                    ags = agoda.session()      # fresh cookies/session identity
-                    cd, nxt = agoda.health()
-                    print(f"\n  !! AGODA UNREACHABLE for {agoda_sick} hotels in "
-                          f"a row ({cd} escalating cooldown(s), next {nxt}s). "
-                          f"Rotated the session. Booking is covering these "
-                          f"hotels; Agoda-only ones are on hotels_to_revisit.csv."
-                          f"\n")
-                if agoda_sick >= AGODA_SICK_ABORT:
-                    print(f"\n  !! STOPPING: Agoda has been unreachable for "
-                          f"{agoda_sick} consecutive hotels. Continuing would "
-                          f"spend hours producing empty results. Everything "
-                          f"discovered so far is check-pointed; re-run the same "
-                          f"city later and discovery resumes where this stopped.\n")
-                    agoda_dead = True
-                    break
+                _breaker(agoda_sick)
 
                 to_publish, review, unmatched = map_rooms(
                     bm_rooms, ag_rooms, cat_ids, agoda_url=m.get("agoda_url"))
 
-                # The existing-room snapshot is read BEFORE the gap-fill, not
-                # after: a room the database already has a picture for is not a
-                # gap, and asking Booking about it would buy a page (or several)
-                # whose results are about to be discarded anyway -- a room this
-                # informs is re-checked FRESH in Phase 2 regardless (see there),
-                # this read is scoping ONLY, never trusted for what gets written.
-                existing = {}
-                if not a.dry_run:
-                    existing, conn = db.with_retry(
-                        conn, lambda c: db.existing_rooms(c, h["id"]),
-                        what="existing-room check")
+                # From the ONE bulk prefetch above -- no per-hotel database
+                # call in discovery at all. Scoping only: a room this informs is
+                # re-checked FRESH in Phase 2 before anything is written, so a
+                # stale or missing entry here can cost a little redundant
+                # Booking work and can never cost correctness.
+                existing = existing_by_hotel.get(h["id"], {})
 
                 # ---- second source, gaps only --------------------------------
                 # Deliberately AFTER the Agoda mapping and scoped to what it
@@ -3677,6 +4015,15 @@ def main(argv=None):
         _STOP = True                # `global _STOP` already declared above
         print("\n  aborted immediately during discovery -- writing whatever "
               "results were already earned before exiting")
+    # A REPORT flag, decided once discovery is over: was Agoda still dark when
+    # we stopped asking? The run continued regardless -- this exists so a thin
+    # result carries the reason on its face instead of looking like a complete
+    # answer about the city.
+    if agoda_sick >= AGODA_SICK_DEGRADED:
+        agoda_dead = True
+        print(f"\n  NOTE: agoda was unreachable for the last {agoda_sick} hotels "
+              f"of discovery. The run continued and requeued them, but this "
+              f"city's result is DEGRADED -- re-run to re-ask them.")
 
     # rooms_review/rooms_unmatched are complete the moment Phase 1 ends --
     # nothing after this point ever touches review_rows/unmatched_rows -- so
@@ -3700,7 +4047,12 @@ def main(argv=None):
     have_plan = bool(planned_ids) or counts["hotels_mapped"] > 0
     if have_plan and not aborted_immediately:
         _print_human_summary(
-            {**counts, "hotels_done": counts["hotels_mapped"]},
+            # Both substitutions are needed together. At the gate "published"
+            # means MAPPED, so the agoda-blind subtotal must be the mapped-time
+            # counter too -- pairing a Phase 1 total with a Phase 2 subtotal
+            # made the funnel over-count (14 of 12) and flag itself [MISMATCH].
+            {**counts, "hotels_done": counts["hotels_mapped"],
+             "hotels_agoda_blind_done": counts["hotels_agoda_blind_attempted"]},
             len(planned_ids | {h["id"] for h in todo[:hotels_planned]}),
             destination, a.rooms_from)
         print("\n(discovery only -- no image downloaded, nothing written to "
@@ -3903,6 +4255,12 @@ def main(argv=None):
                     counts["rooms_skipped_duplicate_name"] += skip_dup
                     counts["rooms_backfilled"] += backfilled
                     counts["hotels_done"] += 1
+                    # Counted at COMMIT, not at attempt. The attempt counter
+                    # reported 70 "published without agoda" in a run that
+                    # published nothing at all -- two different questions
+                    # sharing one number.
+                    if entry["ag_source"] == "no_agoda_match":
+                        counts["hotels_agoda_blind_done"] += 1
                     # {n_rooms} routinely EXCEEDS {ag_count}: agoda's count is
                     # distinct PHYSICAL rooms it has photos for, while a
                     # published row is one per bookme SELLABLE NAME, and bookme
@@ -3992,7 +4350,7 @@ def main(argv=None):
     # -STOPPED is visible in a plain `ls out/runs/`, not just inside
     # manifest.json's "stopped_early" field -- the whole point is telling a
     # partial run apart from a completed one without opening anything.
-    stop_label = ("-AGODA-DOWN" if agoda_dead else "-STOPPED" if _STOP else
+    stop_label = ("-AGODA-DEGRADED" if agoda_dead else "-STOPPED" if _STOP else
                  "-PLAN-ONLY" if not proceed else "")
     folder = os.path.join(
         OUT, "runs", f"{run_id}-city{city_label}-{bound_label}{stop_label}")
@@ -4058,7 +4416,7 @@ def main(argv=None):
             # A run cut short by the breaker is NOT a finished run, and must
             # never read as one: without this, "37 of 50 hotels" and a healthy
             # exit code look identical to a clean, complete pass.
-            "stopped_by_agoda_breaker": agoda_dead,
+            "agoda_degraded": agoda_dead,
             "hotels_in_scope": total_in_city, "hotels_attempted": len(todo),
             # scoped to THIS city, not the global ledger size -- see above
             "hotels_skipped_fresh": skipped_here,
@@ -4136,10 +4494,29 @@ def main(argv=None):
     # which case the plan is the ONLY record of this run's discovery -- wiping
     # it would silently throw away exactly the work the operator just chose to
     # hold onto for later.
+    #
+    # ...EXCEPT the Agoda property cache, which is deliberately KEPT. It is not
+    # run scaffolding, it is a REQUEST cache with its own expiry built in
+    # (`_cached_agoda`: rooms age out after CACHE_FRESH_DAYS, the date-invariant
+    # half -- coordinates, isNHA, slug, city -- never does). Sweeping it turned
+    # every re-run of a city into a full re-scrape.
+    #
+    # MEASURED 2026-08-20 on the same 5 prod hotels, cold vs warm:
+    #     cold cache  14.6 Agoda requests/hotel   (~42,600 for Dubai)
+    #     warm cache   1.0 Agoda requests/hotel   (~2,900 for Dubai)
+    # A 93% reduction in requests -- which is the single largest lever the
+    # pipeline has for NOT tripping Agoda's limiter in the first place, and it
+    # was being thrown away at the end of every successful run.
     if proceed and not (_STOP or agoda_dead):
-        shutil.rmtree(CACHE, ignore_errors=True)
+        for _f in os.listdir(CACHE) if os.path.isdir(CACHE) else []:
+            if _f.startswith("agoda_"):
+                continue                     # keep: request cache, self-expiring
+            try:
+                os.remove(os.path.join(CACHE, _f))
+            except OSError:
+                pass
 
-    status = ("STOPPED (agoda unreachable -- circuit breaker)" if agoda_dead else
+    status = ("finished (DEGRADED -- agoda was unreachable at the end)" if agoda_dead else
               "STOPPED (aborted immediately)" if aborted_immediately else
               "STOPPED (finished the hotel in flight)" if _STOP else
               "PLAN ONLY -- nothing committed" if not proceed else
@@ -4171,7 +4548,16 @@ def main(argv=None):
     elif not proceed:
         print(f"  to commit the check-pointed plan: "
              f"python -m pipeline.run --city {destination}")
-    conn.close()
+    # A connection the server already dropped raises "Already closed" here.
+    # That is not a run failure -- every hotel is committed and the whole
+    # report is already written -- but unguarded it printed a traceback and
+    # exited non-zero, so a finished run looked like a crashed one and would
+    # fail any cron or CI wrapper checking the exit code. Observed live at the
+    # end of the 2026-08-19 production run.
+    try:
+        conn.close()
+    except Exception:
+        pass
     if lock is not None:
         lock.close()               # releases the flock; the OS also does this
                                    # on any exit path, crash included

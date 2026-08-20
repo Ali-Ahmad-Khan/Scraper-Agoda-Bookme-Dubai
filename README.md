@@ -125,26 +125,70 @@ different facts, deliberately not flattened into one zero.
 
 Turn it off with `--no-booking` to reproduce Agoda-only behaviour exactly.
 
-### If Agoda stops answering — the circuit breaker
+### Not getting blocked in the first place
 
-Agoda blocks bursts, and a block can outlive a run. Left alone, that produced a
-**livelock**: six failures, a 420 s cooldown, six more failures, forever — every
-hotel logged as "no agoda match" while the run looked healthy. An unattended
-city run could burn hours that way. What happens now:
+Everything in the next section is *recovery* — it only helps once a block has
+already happened. These are the measures that aim at never tripping the limiter
+at all, in order of how much they actually buy:
 
-| consecutive hotels Agoda cannot be asked about | behaviour |
+| measure | effect |
 |---|---|
-| each cooldown | stand-down **doubles** — 420 s, 840 s, 1680 s … capped at 3600 s. Resets on the first success |
-| 3 | loud banner + the Agoda session is **rotated** (fresh cookies/identity) |
-| 8 | the run **stops**, folder labelled `-AGODA-DOWN`, `stopped_by_agoda_breaker: true` in the manifest |
+| **the Agoda property cache survives a completed run** | **14.6 → 1.0 requests per hotel** on a re-run (measured live). Full Dubai: ~42,600 requests cold, ~2,900 warm |
+| **the browser fallback is metered** | a property page load is dozens of requests and used to bypass the pacer entirely — 89 unmetered page loads in the first prod run. Now charged 8 pacer slots before it navigates |
+| **jitter** | every gap is `interval × U(1.0, 1.45)`. A uniform 1.5 s gap repeated 43,000 times is a metronome; variance removes that signature |
+| **session breaks** | ~60 s pause every 300 requests, so the run is not one continuous 17-hour stream |
+| **identity rotation** | fresh cookie jar *and* User-Agent per session — varied per session, never mid-session |
+
+Jitter and session breaks only ever **add** delay, so neither can make the
+client more aggressive than the floor allows.
+
+**The honest cost**, full Dubai, cold cache:
+
+| | pacing time |
+|---|---|
+| uniform 1.5 s (old behaviour) | ~17.9 h |
+| jittered | ~22.0 h |
+| + session breaks | **~24.3 h** |
+| **warm cache re-run** | **~1.5 h** |
+
+So prevention costs ~36% on a first run and saves ~92% on every run after it.
+The pipeline is entirely pacing-bound — ~14.6 Agoda requests per hotel, of
+which the escalation ladder is 68% — so wall-clock is a direct function of
+request count, and the cache is the only lever that reduces it without asking
+Agoda fewer questions.
+
+Tune in `pipeline/agoda.py`: `JITTER`, `SESSION_BREAK_EVERY` (0 disables),
+`SESSION_BREAK_S`.
+
+### If Agoda stops answering — working through, not waiting it out
+
+Agoda blocks bursts, and a block can outlive a run. Production evidence
+(2026-08-19): six escalating cooldowns fired back to back — 3.75 hours of
+sleeping — and every one reported *"no successful call since cooldown #1"*.
+**Waiting did not recover the block and could not have**, because the rate on
+the far side of each sleep was the same rate that caused it.
+
+So the response is behavioural, not just temporal:
+
+| what happens | behaviour |
+|---|---|
+| every throttle | the **sustained pace slows** — 1.5 s floor, doubling per cooldown, 15 s ceiling — *then* it stands down |
+| after a block | the pace holds. It eases back only after **40 consecutive successes**, never on the first lucky call |
+| every 3 sick hotels | session identity rotates — fresh cookie jar **and** User-Agent (varied per session, never mid-session) |
+| a hotel we could not ask | **requeued once** to the end of discovery, not recorded as an answer |
+| still dark at the end | run is flagged `agoda_degraded`, folder suffix `-AGODA-DEGRADED` |
+
+**There is no abort.** An earlier version stopped the run after 8 consecutive
+unreachable hotels; that was the wrong instinct. Because an unreachable hotel is
+requeued rather than consumed, an outage now costs *time*, not *coverage* — the
+run keeps making progress and re-asks everything it could not reach. The
+degraded flag exists only so a thin result is never mistaken for a complete
+answer about a city.
 
 Two things this deliberately does *not* do: it does not record an outage as
-`no_agoda_match` (that is a separate `agoda_unreachable` reason and its own
-count), and it does not stop the run from producing output — those hotels go to
-Booking instead, so a run during an Agoda block still publishes.
-
-Everything committed before the stop is safe. Re-run the same city later; the
-ledger resumes where it left off.
+`no_agoda_match` (that is a separate `agoda_unreachable` reason with its own
+count), and it does not stop the run from producing output — hotels with Bookme
+rooms still go to Booking, so a run during an Agoda block still publishes.
 
 #### QA'ing it without a database write
 

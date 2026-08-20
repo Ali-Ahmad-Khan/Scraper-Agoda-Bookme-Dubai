@@ -17,6 +17,7 @@ the queried dates are omitted. Probe a date with wide availability.
 """
 import datetime
 import math
+import random
 import re
 import time
 import urllib.parse
@@ -32,9 +33,32 @@ HEADERS = {"User-Agent": UA, "Accept": "application/json",
 HOTEL_SUGGESTION = 7  # ObjectTypeID for a property (vs city/area/airport)
 
 
+# Varied PER SESSION, never per request. A run issues tens of thousands of
+# Agoda calls; one immutable User-Agent across all of them is itself a strong
+# automation fingerprint, while a header that changes mid-session is a stronger
+# one. Rotating when the session is rebuilt (startup, or after a block) is the
+# honest middle: each session looks like one consistent ordinary browser.
+UA_POOL = [
+    UA,
+    ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+     "(KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36"),
+    ("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 "
+     "(KHTML, like Gecko) Version/17.2 Safari/605.1.15"),
+    ("Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
+     "(KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"),
+]
+_session_seq = 0
+
+
 def session():
+    """A fresh session, with a fresh cookie jar and the next identity in the
+    pool. Callers rebuild this to recover from a block (see run.py's breaker) --
+    a new jar with the same headers replays the same fingerprint."""
+    global _session_seq
     s = requests.Session()
-    s.headers.update(HEADERS)
+    ua = UA_POOL[_session_seq % len(UA_POOL)]
+    _session_seq += 1
+    s.headers.update({**HEADERS, "User-Agent": ua})
     return s
 
 
@@ -47,12 +71,46 @@ class Throttled(Exception):
 # the block outlived the run. So requests are paced globally rather than per
 # call site, and repeated throttling escalates into a real cooldown instead of
 # a tight retry loop that just extends the block.
-MIN_INTERVAL = 1.5      # seconds between any two Agoda requests
+MIN_INTERVAL = 1.5      # FLOOR between any two Agoda requests
+MAX_INTERVAL = 15.0     # ceiling the adaptive rate may back off to
 COOLDOWN = 420          # after CONSECUTIVE_LIMIT straight failures, stand down
 COOLDOWN_MAX = 3600     # ceiling for the escalation below
 CONSECUTIVE_LIMIT = 6
+RECOVER_AFTER = 40      # consecutive successes before easing the rate back
 
+# THE SUSTAINED RATE, adaptive -- not a constant.
+#
+# Measured in production 2026-08-19: six escalating cooldowns fired back to
+# back (420+840+1680+3360+3600+3600s = 3.75 HOURS of sleeping) and every one
+# reported "no successful call since cooldown #1". Waiting did not recover the
+# block, and it could not have: the rate on the far side of each sleep was the
+# same rate that caused the block. A sleep pauses the burst; it does not change
+# the behaviour that triggered it.
+#
+# So a throttle now RAISES the sustained interval first and sleeps second, and
+# the raised rate only decays back after RECOVER_AFTER consecutive successes --
+# never on the first lucky call after a block. This is the difference between
+# waiting out a limiter and actually fitting inside it.
+# Jitter multiplier: every gap is interval * U(1.0, JITTER). Only ever ADDS
+# delay, so it cannot make the client more aggressive than the floor allows.
+#
+# 1.45, not higher, and the reasoning is a real trade rather than a guess: what
+# defeats a uniformity check is VARIANCE, not a bigger mean, and the mean is
+# what a 43,000-request run pays for. Measured: 1.9 lifted the mean gap from
+# 1.5s to 2.19s (+46% on a ~17h run, i.e. +8h) to buy no more irregularity than
+# 1.45 does at +22%. Raise it only if a soak test shows uniformity is what is
+# actually being detected.
+JITTER = 1.45
+# A long pause every N requests. Sized against the measured ~14.6 requests per
+# hotel: roughly every 20 hotels, stop for a minute. Costs ~13% wall clock and
+# breaks up the continuous stream a limiter watches for.
+SESSION_BREAK_EVERY = 300
+SESSION_BREAK_S = 60
+
+_interval = MIN_INTERVAL
+_ok_streak = 0
 _last_request = 0.0
+_since_break = 0
 _consecutive = 0
 # Cooldowns served with NO successful request in between. A flat cooldown that
 # resets its counter is what produced a two-hour livelock in production: 6
@@ -66,18 +124,54 @@ def health():
     """(consecutive_cooldowns, next_cooldown_s). 0 means Agoda is answering.
 
     Read by the pipeline's circuit breaker: this module can slow itself down,
-    but only the caller can decide that a run has stopped being worth
-    continuing, and only the caller can tell an operator.
+    but only the caller can decide what to do about it, and only the caller can
+    tell an operator.
     """
     return _cooldowns, min(COOLDOWN * 2 ** _cooldowns, COOLDOWN_MAX)
 
 
-def _pace():
-    global _last_request
-    wait = MIN_INTERVAL - (time.monotonic() - _last_request)
-    if wait > 0:
-        time.sleep(wait)
-    _last_request = time.monotonic()
+def pace_state():
+    """(current_interval_s, floor, ceiling) -- the sustained rate right now."""
+    return _interval, MIN_INTERVAL, MAX_INTERVAL
+
+
+def _pace(cost=1):
+    """Space requests at the CURRENT adaptive interval, with JITTER.
+
+    Two things beyond a plain sleep, both aimed at never tripping the limiter
+    rather than recovering from it:
+
+    JITTER. A run makes ~43,000 Agoda requests (measured: 14.6/hotel x 2,916
+    hotels for Dubai). Spacing every one of them at exactly 1.5s is a metronome
+    -- no browser produces a perfectly uniform inter-request gap for 17 hours,
+    and uniformity is trivially detectable. The jitter multiplier only ever
+    ADDS delay, so the effective mean sits slightly above the floor and this can
+    never make us more aggressive than the un-jittered version.
+
+    COST. Not every call is one request. A browser fallback loads a whole
+    property page -- HTML, JS, XHR, images -- which is dozens of requests to
+    Agoda from our address, and it used to bypass this pacer completely (89
+    such page loads in the first production run, entirely outside the rate
+    discipline). Callers charge what they actually spend.
+
+    SESSION BREAK. Every SESSION_BREAK_EVERY requests the pacer takes a longer
+    pause. A continuous 17-hour stream at a constant rate is the shape a
+    limiter is looking for; periodic idle lets a token-bucket refill and looks
+    like a person stopping for a while. It strictly LOWERS the average rate, so
+    it cannot increase risk -- it costs time, and only pays off by avoiding a
+    block, which is the trade this pipeline wants.
+    """
+    global _last_request, _since_break
+    for _ in range(max(1, cost)):
+        wait = (_interval * random.uniform(1.0, JITTER)
+                - (time.monotonic() - _last_request))
+        if wait > 0:
+            time.sleep(wait)
+        _last_request = time.monotonic()
+    _since_break += max(1, cost)
+    if SESSION_BREAK_EVERY and _since_break >= SESSION_BREAK_EVERY:
+        _since_break = 0
+        time.sleep(SESSION_BREAK_S * random.uniform(0.8, 1.2))
 
 
 def _note(ok, log=None):
@@ -89,19 +183,34 @@ def _note(ok, log=None):
     cooldown -- against that, a constant wait is not backoff, it is a busy-wait
     with a long sleep in it. One success anywhere resets both counters.
     """
-    global _consecutive, _cooldowns
+    global _consecutive, _cooldowns, _interval, _ok_streak
     if ok:
         _consecutive = _cooldowns = 0
+        _ok_streak += 1
+        # Ease the rate back only after SUSTAINED success. Restoring it on the
+        # first call that happens to get through is how a run walks straight
+        # back into the block it just escaped.
+        if _ok_streak >= RECOVER_AFTER and _interval > MIN_INTERVAL:
+            _interval = max(MIN_INTERVAL, _interval / 1.5)
+            _ok_streak = 0
+            (log or print)(f"  agoda steady for {RECOVER_AFTER} calls -- easing "
+                           f"pace to {_interval:.1f}s")
         return
     _consecutive += 1
+    _ok_streak = 0
     if _consecutive >= CONSECUTIVE_LIMIT:
-        wait = min(COOLDOWN * 2 ** _cooldowns, COOLDOWN_MAX)
+        # RATE FIRST, SLEEP SECOND. Raising the sustained interval is the part
+        # that actually changes our behaviour; the sleep only buys the limiter
+        # time to forget the burst. Doing only the sleep is what produced six
+        # consecutive failed cooldowns in production.
+        was, _interval = _interval, min(_interval * 2, MAX_INTERVAL)
         _cooldowns += 1
-        msg = (f"  agoda throttled {_consecutive}x in a row -- cooldown "
-               f"#{_cooldowns}, standing down {wait}s "
-               f"(no successful call since cooldown #1)" if _cooldowns > 1 else
-               f"  agoda throttled {_consecutive}x in a row -- cooling down {wait}s")
-        (log or print)(msg)
+        wait = min(COOLDOWN * 2 ** (_cooldowns - 1), COOLDOWN_MAX)
+        (log or print)(
+            f"  agoda throttled {_consecutive}x in a row -- cooldown "
+            f"#{_cooldowns}: sustained pace {was:.1f}s -> {_interval:.1f}s, "
+            f"standing down {wait}s"
+            + (" (no successful call since cooldown #1)" if _cooldowns > 1 else ""))
         time.sleep(wait)
         _consecutive = 0
 
