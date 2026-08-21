@@ -206,7 +206,7 @@ async def fetch_rooms(targets, check_in, check_out, country_code=None,
         if hid is not None:
             captured[hid] = grid.get("masterRooms") or []
 
-    handler = lambda r: pending.append(asyncio.create_task(on_response(r)))  # noqa: E731
+    handler = lambda r: pending.append(asyncio.create_task(on_response(r)))
     page.on("response", handler)
 
     async def drain():

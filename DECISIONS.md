@@ -1979,3 +1979,284 @@ Placed under HOTELS, not in the ROOMS block, deliberately: room-level coverage
 is already reported there, and an 85% room average **averages away** the
 harsher fact that a whole hotel came away with nothing. Same class of defect as
 D-74 — the number was right, the label implied a success it had not earned.
+
+---
+
+**D-76 — CRITICAL, CONFIRMED IN PROD: a scope switch relabeled the plan
+checkpoint instead of clearing it, and a Nigeria-scoped run committed two
+Dubai hotels to prod. Fixed.**
+
+Reported by the operator from a real run's log (`20260821-035153`, Benin
+City - Nigeria, city_ids `[163672]`, run on a separate machine). Phase 1
+discovered exactly the 3 Nigeria hotels it should have — gate summary showed
+`3/3`, no mismatch. Then Phase 2, which ran automatically because the wizard's
+pause prompt was answered "n" (declining the pause, not declining Phase 2),
+began iterating `[1/533]`, and item 1 was **Anantara Downtown Dubai**, item 2
+**Nihal Residency Hotel Apartments** — real Dubai hotels, hundreds of hotels
+away from anything Nigeria-related. Confirmed from the log's own print format
+(`counts["rooms_inserted"] += n_rooms`, real COS uploads) that these were
+**genuine prod writes**: 74 rooms / 433 images for Anantara, 1 room / 6 images
+for Nihal Residency, both attributed to a run tagged "Benin City - Nigeria."
+The operator cancelled with Ctrl-C on realizing this, before observing whether
+the rest of the stale batch would have followed.
+
+**Root cause, verified against the code, not inferred:**
+
+- `PLAN_CACHE` (`plan.csv`) is ONE shared file across every city. Its scope is
+  tracked only in a sidecar (`plan.csv.scope`); the CSV itself carries no
+  per-row scope marker.
+- `_load_plan(scope)` correctly detects a mismatch and returns `({}, set())`
+  for THAT read — but does nothing to the file.
+- `_append_plan_rows` is a pure append (by design, for per-hotel crash
+  safety) and never rewrites or clears the file.
+- Phase 1's entry point (`pipeline/run.py`, the `main()` discovery section)
+  called `_load_plan(plan_scope)` then **unconditionally**
+  `_save_plan_scope(plan_scope)` — relabelling the sidecar to the NEW scope
+  regardless of whether the load matched. From that instant, every stale row
+  still sitting in the CSV from the OLD scope silently reads as "valid for the
+  new one."
+- Phase 2's own read, later in the same run, trusts the file wholesale
+  (filtered only by what the ledger already marked done, never by "is this
+  hotel actually in THIS run's discovered set") — by design, so that an
+  interrupted same-city run can resume cleanly. That design assumption is
+  exactly what a cross-city relabel violates.
+
+**The fix — `_load_plan(scope, adopt=False)`.** On a scope mismatch (wrong
+schema OR wrong scope tag), if `adopt=True` the stale file is removed outright
+via a new `_discard_plan_cache()`, not just left in place under a new label.
+`adopt=True` is passed from exactly one call site: Phase 1's own entry point,
+the only place that is about to relabel the file for a new scope right after.
+Every other call site (`selftest`'s own diagnostic probe of a hypothetical
+scope, Phase 2's read later in the SAME already-normalized run) keeps
+`adopt=False` and is unaffected.
+
+**What this does NOT change, and why it matters:** the exact case the
+operator confirmed they still want — *"if 500 something hotels were unresolved
+from Dubai and had to run... if I'm ever again running the pipeline on
+Dubai"* — is untouched. A same-city, same-config resume hits the scope-MATCH
+branch, never the mismatch one, so an interrupted Dubai plan is picked up
+exactly as before. Only a genuinely DIFFERENT scope (a different city, or the
+same city under changed matching config) now wipes the file instead of
+quietly inheriting it.
+
+**Verified two ways:**
+1. Full selftest suite (11/11) — including the existing plan-checkpoint test,
+   which depends on a diagnostic mismatch read (`adopt` defaulted off) leaving
+   the file intact for a later same-scope read. Unaffected, confirming the fix
+   doesn't regress the resumability the ledger's own test already covers.
+2. A standalone reproduction of the exact reported scenario: check-point a
+   Dubai hotel, switch to a Nigeria scope with `adopt=True`, check-point a
+   Nigeria hotel, then read back as Phase 2 would. Before the fix this would
+   return both hotel ids; after, it returns only the Nigeria one.
+
+**Not yet done:** the machine that produced this log is not this one (a
+PowerShell prompt in the log, `C:\Users\Bookme\Scraper-Agoda-Bookme-Dubai 4\`,
+confirms a separate checkout). That machine's `out/cache/plan.csv` may
+currently still hold a mixed-scope file from this exact incident. The fix
+prevents the NEXT occurrence; it does not retroactively clean a file already
+in this state elsewhere. Recommend checking/clearing `out/cache/plan.csv` and
+`plan.csv.scope` on that machine directly.
+
+**Also worth knowing, unrelated bug but same evidence:** the wizard's pause
+prompt ("Pause and let you review the discovered plan before downloading
+images and publishing starts? [Y/n]") answers **"n" as "don't pause"**, i.e.
+proceed straight through to Phase 2 with no further confirmation. That is
+documented behavior (mirrors `--yes`), not a bug, but it is worth knowing it
+is why Phase 2 began immediately with no second gate to catch the leak before
+it reached MySQL.
+
+---
+
+**D-77 — D-76's hotfix (adopt=True, wipe-on-mismatch) replaced with a
+stronger design: one file PER SCOPE, no shared filename at all.**
+
+The operator pushed back on the D-76 hotfix, correctly: wiping on mismatch
+closes the cross-city leak, but it ALSO wipes a same-city checkpoint the
+moment ANY other scope runs in between -- verified directly: a Dubai plan,
+followed by a Nigeria run, followed by a return to the SAME Dubai scope,
+came back `set()`. Confirmed by the operator's own question and by a live
+test before any further change was made, not assumed.
+
+**Why the hotfix still wasn't the right shape, even though it closed the
+reported bug.** A mutable global path (`PLAN_CACHE`), reassigned once per run
+and then read implicitly by every function, is the same risk SHAPE as the
+sidecar tag it replaced -- correctness still depends on every caller, present
+and future, remembering to set it in the right order before reading or
+writing. The operator asked directly not to trade rigor for a smaller diff.
+
+**The fix: `_load_plan(scope)` and `_append_plan_rows(..., scope)` each
+resolve their OWN file from `scope` via `_plan_cache_path(scope) ->
+plan-<md5>.csv`.** No shared global, no sidecar, nothing to keep in sync.
+Consequences, each verified rather than assumed:
+
+- **Cross-scope leak: impossible by construction**, not guarded against by a
+  runtime check. Two different scopes are two different files; there is no
+  code path left that could read one into the other.
+- **Same-scope resume across an intervening, unrelated run: preserved.** A
+  Dubai plan is untouched by a Nigeria run in between and is found again,
+  unchanged, on return -- this is the actual point of per-hotel
+  check-pointing, and D-76's hotfix had traded it away without saying so.
+- **A second, worse variant closed for free:** two DIFFERENT scopes running
+  CONCURRENTLY (not just sequentially) used to share one file under the old
+  design -- a race, not just a sequential leftover. Per-scope files make that
+  structurally impossible too; not requested, surfaced because the redesign
+  implies it.
+- **The header-schema guard is unchanged** (an old code version's file
+  format under the same scope hash is still detected and removed) -- nothing
+  from D-76's coverage was quietly dropped; it was checked line-by-line
+  against what the old branch handled, not assumed equivalent.
+
+**Verified, not asserted:**
+1. Full selftest suite, 11/11. The plan-checkpoint test was rewritten to
+   include the EXACT reported sequence -- Dubai discovers, a Nigeria scope
+   starts fresh (asserted empty, not inherited), Nigeria's own commit-time
+   read contains only its own hotel, and Dubai's checkpoint is read back
+   afterward and asserted byte-identical to before the Nigeria run touched
+   anything. This is a direct repro of D-76's incident, not a paraphrase.
+2. Every prior assertion (round trip of images/size/category/provenance,
+   resumability, hotel-set sensitivity, matching-config sensitivity, torn-row
+   tolerance) preserved, none silently dropped.
+3. Lint: baseline unchanged (34 errors before and after; one genuinely new
+   finding in the added test, `nigeria_rows` unused, fixed immediately).
+4. **Migration of this machine's real, uncommitted plan.** `out/cache/plan.csv`
+   held today's live 168-hotel Dubai discovery (D-70/D-71's verification run),
+   scope-tagged `30bab19aa4724acde2607599e8cab431` in its old sidecar. Renamed
+   to `plan-30bab19aa4724acde2607599e8cab431.csv`; confirmed by recomputing
+   `_plan_scope` from a live `--city Dubai --limit 200` query against prod and
+   getting back the IDENTICAL hash, then loading the renamed file and getting
+   back all 168 hotels. Nothing lost. (`plan.csv.scope`, now informationless
+   once the hash is in the filename, removed.)
+
+**Honest tradeoff, stated plainly, not left implicit:** each distinct
+(hotel set, matching config) combination now keeps its own file
+indefinitely -- no automatic cleanup exists. Bounded in practice (a handful
+of scopes in real use, a few KB to a few MB each), but genuinely unbounded in
+principle. Left as a `ponytail:` comment naming the ceiling (ADD a sweep
+keyed on "every hotel in this plan reached hotels_done" if it ever actually
+accumulates), not silently deferred.
+
+---
+
+**D-78 — Wiring audit + a real Phase-2 commit run caught a genuine (cosmetic)
+summary bug: `[MISMATCH != 1]` on a run that actually behaved correctly.**
+
+Full audit run: `--selftest` 11/11, repo-wide `ruff check .` (76 → 69 after
+fixing 7 genuinely trivial findings: import sort in run.py/ledger.py, an
+unused `noqa`, four unused unpacked variables -- all zero-behavior-change,
+none touched anything structural), every CLI flag confirmed actually wired
+to behavior (`a.<flag>` referenced downstream, none dead), every `pipeline/*`
+module confirmed imported and used somewhere (no orphans). Two `B023`
+(closure-over-loop-variable) findings inspected directly rather than trusted
+to the linter's generic warning: both consume the closure synchronously,
+within the same iteration, via `list(ex.map(...))` / `db.with_retry`'s direct
+call -- confirmed false positives, not fixed, not left as an unresolved flag.
+
+**The live flow (Phase 4/5): re-ran Benin City, Nigeria end-to-end, THIS time
+letting Phase 2 commit for real** (`--city "Benin City" --city-id 163672
+--yes --limit 3 --rooms-from both`, no `--plan-only`). Confirms D-77's fix
+holds live, not just in the selftest: discovery scoped to exactly 3 hotels,
+no Dubai bleed. One hotel (Eterno Hotels Limited) had rooms to publish;
+Phase 2 committed it.
+
+**Caught by the run itself, in real output, not by reading code:** the final
+summary printed `Benin City - Nigeria · 1 hotels selected` and
+`total 3/1 [MISMATCH != 1]` -- the pipeline's own accounting guard correctly
+firing on a real inconsistency, exactly as D-49's design intends. Root cause:
+`hotels_reached = i if work2 else hotels_planned` used `i` -- how far PHASE
+2's OWN loop over `work2` walked -- as the run's reported scope. But `work2`
+only ever contains hotels that had something to PUBLISH; a hotel Phase 1
+discovered and found empty never enters it (the discovery loop `continue`s
+before ever check-pointing one). So `len(work2) < hotels_planned` on almost
+ANY ordinary run where some hotels come up empty -- not just an aborted one --
+while `counts`'s other tallies (`no_listing`, `zero_rooms`) are populated
+against the FULL Phase 1 population regardless. Two numbers from two
+different populations, compared as if they were one.
+
+**Fixed:** `hotels_reached = hotels_planned`, unconditionally -- matching the
+`if not proceed:` branch already doing exactly this. `hotels_planned` is
+right in every case: an ordinary full run, one stopped early in Phase 1
+(handled the same way it always was), and one stopped early in Phase 2
+(nothing after Phase 1 changes how many hotels were DISCOVERED, only how many
+of those get published). Verified by replaying the actual run's own
+manifest.json through the corrected function: `total 3/3 [ok]`.
+
+**Not a data-integrity bug.** `manifest.json` (the machine-readable record)
+already had the correct `hotels_attempted: 3` throughout -- this was purely a
+terminal-display bug in the human-readable summary's denominator. Confirmed
+by checking the actual data, not the printout:
+
+| checked | result |
+|---|---|
+| `v2_common_hotels` row for `eterno-hotels-limited` | id 2495860, exists |
+| `v2_rooms` where `v2_common_hotel_id=2495860` | **5 rows**, matches `rooms_inserted: 5` |
+| `size_sqft` column | **now exists on prod** (215/323/344/377/431 populated) |
+| `v2_attachments` (`attachable_type='...Room'`, `category='room-image'`) | **41 rows**, matches `attachments_inserted: 41` exactly |
+| 3 sampled `cdn.bookmepk.com` URLs, live HTTP HEAD | **all 200, real `image/jpeg`, 88–120KB** -- genuine objects, not placeholder strings |
+| `ledger_published.csv` | correctly recorded the publish |
+
+**One wrong turn during verification, corrected before reporting anything:**
+my first `v2_attachments` query joined on `attachable_id` alone and returned
+49 rows that LOOKED like room images but were `attachable_type='...HotelReview'`,
+`category='review-rating-image'` -- unrelated customer review photos that
+happened to share numeric ids with these rooms in a polymorphic table. Caught
+by checking the discriminator columns before reporting the number, not after.
+
+**`images_uploaded` (46) vs `attachments_inserted` (41) -- a 5-room gap,
+explained, not just noted.** `mirror_all_images` (which produces `uploaded`)
+counts every image mirrored to COS, including each room's thumbnail;
+`db.publish`'s `n_att` counts only NEW `v2_attachments` rows, and a room's
+thumbnail is stored directly on `v2_rooms.thumbnail`, not duplicated into
+`v2_attachments`. Exactly 5 rooms, exactly a 5-image gap. Consistent with
+that explanation, not chased further as a live bug.
+
+**Confirms, independently of D-77's own selftest:** `size_sqft`'s prod
+migration (blocked earlier this session by a missing ALTER grant, D-62) has
+since been completed -- by the operator, outside this pipeline's own
+credentials, as the schema-adaptive code always expected.
+
+---
+
+**D-79 — The end-of-run cache sweep was a blanket delete, not a scoped one --
+it defeated D-77's resumability guarantee one call site later, same day.**
+
+Caught live, not by reading code: right after D-77 migrated and verified a
+real 168-hotel Dubai plan under the new per-scope naming, an UNRELATED
+3-hotel Benin City, Nigeria run (D-78's live verification) completed
+successfully -- and the Dubai plan file was gone immediately after, with
+nothing in that Nigeria run ever touching Dubai.
+
+**Root cause:** the end-of-run sweep (`if proceed and not (_STOP or
+agoda_dead): for _f in os.listdir(CACHE): ... os.remove(...)`) removed EVERY
+file in `out/cache/` except ones prefixed `agoda_` -- unconditionally, on ANY
+successful run, regardless of which scope's files they were. D-77 made plan
+checkpoints resume correctly across an unrelated city running in between;
+this sweep undid that guarantee the moment the unrelated city's OWN run
+happened to finish cleanly, which is the ordinary case, not a rare one.
+
+**Fixed:** the sweep now removes only `_plan_cache_path(plan_scope)` -- THIS
+run's own plan file -- never anything belonging to a different scope.
+Verified: selftest 11/11, lint clean, syntax valid.
+
+**Correction made while writing this up, not after:** an earlier draft of
+this entry also claimed `booking_waf.json` was affected by the same blanket
+sweep. Checked before leaving it in: `booking.TOKEN_CACHE` resolves to
+`out/booking_waf.json` -- the top level of `out/`, never inside `CACHE`
+(`out/cache/`) at all -- so the sweep (`os.listdir(CACHE)`) never touched it,
+before or after this fix. Same for the four orphaned `0N_*.json` files
+sitting at the top of `out/`: unreferenced by any current code (checked by
+grep), also outside `CACHE`, also never in scope for this sweep.
+
+**Deliberately NOT restored: the sweep no longer touches `bookme_rooms.json`**
+(previously caught by the same blanket `!= agoda_` inside CACHE, now simply
+outside what this sweep removes at all). Judged safe to leave rather than
+rebuilt scope-aware in the same pass: it already carries its own embedded
+scope and self-invalidates on mismatch (D-56 predates this); its content is
+discovered FACTS ("this room exists"), never a decision that can go stale, so
+an unswept leftover is harmless to keep, only a few KB.
+
+Both are the same LOWER-severity shape (unbounded accumulation, not silent
+data leak) already accepted and documented for plan-*.csv in D-77's own
+ponytail note. Not chased further here to stay proportionate to what this
+pass actually needed to fix -- the operator is clearing the whole cache
+directory outright immediately after this fix (starting the real prod
+campaign fresh), which makes the accumulation question moot for now.

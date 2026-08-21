@@ -283,7 +283,8 @@ if __name__ == "__main__":
         # fsync: the row must be on disk, not merely in the OS page cache, by
         # the time mark_published returns -- the ledger write is the pipeline's
         # durability point (MySQL commits, THEN this records it).
-        import subprocess, sys as _sys
+        import subprocess
+        import sys as _sys
         h2 = {"id": 77, "city_id": 1280, "slug": "d", "name": "D"}
         led5.mark_published(h2, "run5", 1, 1)
         out = subprocess.run(

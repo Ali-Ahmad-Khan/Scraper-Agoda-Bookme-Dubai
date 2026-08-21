@@ -41,8 +41,18 @@ from concurrent.futures import ThreadPoolExecutor
 
 import requests
 
-from . import (agoda, agoda_browser, booking, bookme, categories, config, cos,
-               db, ledger, match)
+from . import (
+    agoda,
+    agoda_browser,
+    booking,
+    bookme,
+    categories,
+    config,
+    cos,
+    db,
+    ledger,
+    match,
+)
 
 # Redirected to a file (nohup, cron -- every real deployment), stdout is FULLY
 # block-buffered by default, so agoda.py's "cooling down 420s" warnings sit
@@ -335,13 +345,45 @@ def _load_probe_state(scope, live_rooms):
 #
 # So discovery runs for every hotel FIRST, writing what it finds to a plan
 # (this checkpoint), and only after that does a second pass mirror images and
-# publish. Same shape, same reasoning, as the Bookme probe checkpoint above:
-# resumable per unit of work, invalidated when the hotel set or the tuning
-# that produced it changes, discarded on a clean finish.
+# publish. Same resumability reasoning as the Bookme probe checkpoint above --
+# but NOT the same shape. PROBE_CACHE is one JSON file, rewritten wholesale by
+# an atomic os.replace on every save, so its scope tag lives INSIDE that same
+# write and can never drift from the content it describes. This checkpoint is
+# check-pointed per HOTEL by pure append (crash-safety: losing at most the
+# hotel in flight matters more here than an atomic whole-file rewrite would),
+# so a single shared filename cannot carry a scope tag safely -- a separate
+# sidecar tag was tried first and is exactly what let a run scoped to Benin
+# City, Nigeria commit two stale Dubai hotels to prod (2026-08-21, see D-76):
+# the tag was relabelled to the new scope on a mismatch, but the STALE ROWS
+# under the old scope were never cleared, so a later read under the
+# newly-matching tag saw them as if they belonged to the new city.
+#
+# Fixed by keying the FILENAME itself by scope, not a same-named file plus an
+# out-of-band label. A different hotel set or matching config addresses a
+# DIFFERENT file -- there is no tag to mismanage and no stale content it could
+# ever read, because nothing ever wrote there under that scope. Returning to
+# a PREVIOUSLY-used scope (the same city, later, even after other cities ran
+# in between) finds its own file exactly where it left it -- resuming an
+# interrupted or --plan-only discovery is the entire point of check-pointing
+# per hotel, and switching cities in between must not cost that.
+#
+# ponytail: each distinct (hotel set, matching config) combination keeps its
+# own file until someone deletes it by hand -- no automatic cleanup exists.
+# Bounded in practice (a handful of scopes ever used, a few KB to a few MB
+# each), but genuinely unbounded in principle. Add a sweep keyed on "every
+# hotel in this plan reached hotels_done" if it ever actually accumulates.
 #
 # Row-per-ROOM CSV, hotel columns repeated -- the same flat shape already used
 # for rooms_review.csv/rooms_unmatched.csv, not a new convention.
-PLAN_CACHE = os.path.join(CACHE, "plan.csv")
+#
+# No module-level path constant on purpose (there was one, PLAN_CACHE, before
+# this rewrite). A shared mutable global that gets reassigned once per run is
+# the same risk shape as the sidecar it replaces: correctness would again
+# depend on every call site remembering to set it first, in the right order,
+# before reading or writing. _load_plan and _append_plan_rows below each take
+# `scope` explicitly and resolve their own path from it via _plan_cache_path
+# -- there is nothing shared to get out of sync, because there is nothing
+# shared.
 PLAN_COLUMNS = ["city_id", "city_name", "hotel_id", "slug", "hotel_name",
                "bm_label", "ag_count", "ag_source", "n_review", "n_unmatched",
                "room_name", "category", "category_id", "size_sqft",
@@ -352,8 +394,7 @@ def _plan_scope(hotels):
     """Same load-bearing role as _probe_scope: a plan checkpoint is only valid
     for the hotel set AND the matching/gap-fill tuning that produced it. A
     config change (a tightened Booking gate, a new review threshold) must
-    invalidate a stale plan rather than silently reuse rooms matched under the
-    old rules."""
+    address a different file than a plan matched under the old rules."""
     ids = sorted(h["id"] for h in hotels)
     payload = json.dumps([ids, config.ROOM_ACCEPT, config.ROOM_REVIEW,
                           config.BOOKING_MIN_NAME, config.BOOKING_MAX_KM,
@@ -362,14 +403,27 @@ def _plan_scope(hotels):
     return hashlib.md5(payload).hexdigest()
 
 
+def _plan_cache_path(scope):
+    return os.path.join(CACHE, f"plan-{scope}.csv")
+
+
 def _load_plan(scope):
-    """(rows_by_hotel_id, planned_hotel_ids) from a checkpoint, or ({}, set())
-    if there is none or it does not match this run's scope. Each value in
-    rows_by_hotel_id is that hotel's list of raw CSV row dicts, in the order
-    written -- reconstruction into room dicts happens at the CALL SITE
-    (Phase 1 preview vs Phase 2 commit want slightly different shapes from the
-    same rows), not here."""
-    if not os.path.exists(PLAN_CACHE):
+    """(rows_by_hotel_id, planned_hotel_ids) from `scope`'s own checkpoint
+    file, or ({}, set()) if it does not exist. Each value in rows_by_hotel_id
+    is that hotel's list of raw CSV row dicts, in the order written --
+    reconstruction into room dicts happens at the CALL SITE (Phase 1 preview
+    vs Phase 2 commit want slightly different shapes from the same rows), not
+    here.
+
+    No mismatch is possible to detect or mishandle: the scope IS the
+    filename (see _plan_cache_path), so a different hotel set or matching
+    config simply addresses a file that was never written, which reads back
+    as empty for the ordinary reason a missing file always does. There used
+    to be a separate mismatch branch here, guarding a shared filename plus an
+    out-of-band scope tag -- see D-76 for why that shape let a run scoped to
+    Benin City, Nigeria commit two stale Dubai hotels to prod."""
+    path = _plan_cache_path(scope)
+    if not os.path.exists(path):
         return {}, set()
     # csv.reader + manual width check, NOT csv.DictReader -- a torn last row
     # (a crash mid-write) has FEWER fields than the header, and DictReader
@@ -379,7 +433,7 @@ def _load_plan(scope):
     # ledger.py's own loader was built to close (see its docstring), applied
     # here rather than re-learned.
     try:
-        with open(PLAN_CACHE, newline="", encoding="utf-8", errors="replace") as f:
+        with open(path, newline="", encoding="utf-8", errors="replace") as f:
             raw = list(csv.reader(f))
     except (OSError, csv.Error) as e:
         print(f"  plan checkpoint unreadable ({type(e).__name__}); "
@@ -389,8 +443,16 @@ def _load_plan(scope):
         return {}, set()
     header, data = raw[0], raw[1:]
     if header != PLAN_COLUMNS:
-        print("  plan checkpoint has a different schema; ignoring it "
-              "and re-discovering fresh")
+        # A different CSV shape under this exact scope hash can only mean an
+        # older code version wrote it -- the schema changed since. Removed,
+        # not just ignored: the append below has no way to add a header-only
+        # row partway through a file, so leaving it would corrupt further.
+        print("  plan checkpoint has a different schema (from an older code "
+              "version); removing it and re-discovering fresh")
+        try:
+            os.remove(path)
+        except OSError:
+            pass
         return {}, set()
     rows, skipped = [], 0
     for fields in data:
@@ -401,20 +463,6 @@ def _load_plan(scope):
     if skipped:
         print(f"  plan checkpoint: skipped {skipped} malformed row(s) (likely "
               f"a torn write from an interrupted run); the rest loaded normally")
-    # The scope is not stored IN the CSV (a hotel-by-hotel row shape has
-    # nowhere clean to put a single run-wide value without repeating it on
-    # every row); it lives in a sidecar instead, exactly like PROBE_CACHE's
-    # `scope` field but out-of-band since this file's shape is tabular.
-    scope_path = PLAN_CACHE + ".scope"
-    try:
-        with open(scope_path, encoding="utf-8") as f:
-            saved_scope = f.read().strip()
-    except OSError:
-        saved_scope = None
-    if saved_scope != scope:
-        print("  plan checkpoint is for a different hotel set or matching "
-              "config; ignoring it and re-discovering fresh")
-        return {}, set()
     by_hotel = {}
     for r in rows:
         try:
@@ -425,19 +473,18 @@ def _load_plan(scope):
     return by_hotel, set(by_hotel)
 
 
-def _save_plan_scope(scope):
-    os.makedirs(CACHE, exist_ok=True)
-    with open(PLAN_CACHE + ".scope", "w", encoding="utf-8") as f:
-        f.write(scope)
-
-
 def _append_plan_rows(hotel, to_publish, bm_label, ag_count, ag_source,
-                      n_review, n_unmatched):
-    """Check-point ONE hotel's discovery result. Called immediately after that
-    hotel's mapping finishes, never batched -- discovery's per-hotel cost is
-    already dominated by network round-trips, so a per-hotel fsync is cheap
-    against that, and it is the tightest resumability granularity available:
-    a crash loses at most the hotel in flight, never a whole batch.
+                      n_review, n_unmatched, scope):
+    """Check-point ONE hotel's discovery result, into `scope`'s own file.
+    Called immediately after that hotel's mapping finishes, never batched --
+    discovery's per-hotel cost is already dominated by network round-trips,
+    so a per-hotel fsync is cheap against that, and it is the tightest
+    resumability granularity available: a crash loses at most the hotel in
+    flight, never a whole batch.
+
+    `scope` is required, not read off a global -- see the module comment
+    above PLAN_COLUMNS for why a shared mutable path is the same risk shape
+    as the sidecar this design replaces.
 
     Plain append, not the temp-file+os.replace dance _save_probe_state uses --
     that protects a REWRITE of the whole file; this only ever grows it, so the
@@ -447,8 +494,9 @@ def _append_plan_rows(hotel, to_publish, bm_label, ag_count, ag_source,
     relies on for its own append-only files.
     """
     os.makedirs(CACHE, exist_ok=True)
-    new = not os.path.exists(PLAN_CACHE)
-    with open(PLAN_CACHE, "a", newline="", encoding="utf-8") as f:
+    path = _plan_cache_path(scope)
+    new = not os.path.exists(path)
+    with open(path, "a", newline="", encoding="utf-8") as f:
         w = csv.DictWriter(f, fieldnames=PLAN_COLUMNS)
         if new:
             w.writeheader()
@@ -1687,7 +1735,7 @@ def apply_review_decisions(csv_path, conn, cat_ids, session=None, dry_run=False)
             print(f"  {label}: every candidate image failed to mirror, skipped")
             failed += 1
             continue
-        n_rooms, n_att, skipped, _dup, backfilled = db.publish(
+        n_rooms, n_att, _skipped, _dup, backfilled = db.publish(
             conn, {"id": int(r["hotel_id"])}, [room])
         status = "inserted" if n_rooms else "backfilled" if backfilled else "already complete"
         print(f"  {label}: {status}, {n_att} image(s) attached")
@@ -1919,33 +1967,34 @@ def _selftest_identity_rotation():
 
 
 def _selftest_plan_checkpoint(cats):
-    """The Phase 1/Phase 2 handoff: what gets written, what a reload sees, and
-    the two ways a stale checkpoint must be refused rather than trusted.
+    """The Phase 1/Phase 2 handoff: what gets written, what a reload sees, that
+    a different scope can neither read NOR destroy another scope's rows, and
+    that the SAME scope survives an unrelated scope running in between --
+    the exact "Dubai, then Nigeria, then Dubai again" sequence reported
+    2026-08-21 (D-76), reproduced directly rather than argued about.
 
-    Redirects CACHE/PLAN_CACHE to a temp dir for the whole section, same
-    reasoning as _selftest_harvest: this must not read or write the real run's
-    checkpoint, and must not depend on whether one exists.
+    Redirects CACHE to a temp dir for the whole section, same reasoning as
+    _selftest_harvest: this must not read or write the real run's own
+    checkpoints, and must not depend on whether any exist.
     """
     import tempfile as _tf
-    real_cache, real_plan = CACHE, PLAN_CACHE
+    real_cache = CACHE
     _tmpdir = _tf.mkdtemp()
     globals()["CACHE"] = _tmpdir
-    globals()["PLAN_CACHE"] = os.path.join(_tmpdir, "plan.csv")
     try:
         h1 = {"id": 501, "city_id": 1280, "city_name": "Dubai",
              "slug": "hotel-a", "name": "Hotel A"}
-        rooms1 = [_room("King Room", ["https://agoda/k.jpg"], cats, size_sqft=280),
-                  _room("Twin Room", [], cats)]
-        _append_plan_rows(h1, rooms1, "5", 2, "http", 1, 0)
-
         h2 = {"id": 502, "city_id": 1280, "city_name": "Dubai",
              "slug": "hotel-b", "name": "Hotel B"}
+        scope = _plan_scope([h1, h2])
+
+        rooms1 = [_room("King Room", ["https://agoda/k.jpg"], cats, size_sqft=280),
+                  _room("Twin Room", [], cats)]
+        _append_plan_rows(h1, rooms1, "5", 2, "http", 1, 0, scope)
+
         rooms2 = [_room("Suite", ["https://b/1.jpg", "https://b/2.jpg"], cats)]
         rooms2[0]["image_source"] = "booking"          # not agoda's own default
-        _append_plan_rows(h2, rooms2, "3", 0, "no_agoda_match", 0, 0)
-
-        scope = _plan_scope([h1, h2])
-        _save_plan_scope(scope)
+        _append_plan_rows(h2, rooms2, "3", 0, "no_agoda_match", 0, 0, scope)
 
         # -- round trip: what got written is what comes back -------------------
         by_hotel, planned_ids = _load_plan(scope)
@@ -1976,14 +2025,18 @@ def _selftest_plan_checkpoint(cats):
         assert [h["id"] for h in work1] == [503], (
             f"a hotel already check-pointed was re-offered to discovery: {work1}")
 
-        # -- scope invalidation: a DIFFERENT hotel set must not reuse this plan
+        # -- a different hotel set addresses a DIFFERENT file, full stop -------
+        # Not "invalidated on comparison" -- there is no comparison. It reads
+        # empty for the same reason any never-written file does.
         other_scope = _plan_scope([h1])              # h2 missing -> different scope
         assert other_scope != scope, "scope is not sensitive to the hotel set"
+        assert _plan_cache_path(other_scope) != _plan_cache_path(scope), (
+            "two different scopes must resolve to two different files")
         by_hotel2, planned_ids2 = _load_plan(other_scope)
         assert by_hotel2 == {} and planned_ids2 == set(), (
             "a plan for a different hotel set was accepted as current")
 
-        # -- scope invalidation: matching TUNING must also invalidate --------
+        # -- changed matching TUNING must also address a different file ------
         # A tightened Booking gate or review threshold changed which rooms
         # WOULD have been matched; reusing rooms matched under the old rules
         # would silently publish a decision the current config disagrees with.
@@ -1996,19 +2049,47 @@ def _selftest_plan_checkpoint(cats):
         assert tuning_scope != scope, (
             "plan scope is blind to matching config, not just the hotel set")
 
+        # -- THE REPORTED SCENARIO: Dubai, then an unrelated city, then Dubai
+        # again -- must neither leak into the other city NOR lose its own data
+        # to it. This is D-76's exact repro, not a paraphrase of it.
+        nigeria_h = {"id": 900001, "city_id": 163672,
+                    "city_name": "Benin City - Nigeria",
+                    "slug": "eterno-hotels-limited", "name": "Eterno Hotels Limited"}
+        nigeria_scope = _plan_scope([nigeria_h])
+        assert nigeria_scope not in (scope, other_scope, tuning_scope)
+        assert _load_plan(nigeria_scope) == ({}, set()), (
+            "Nigeria's own scope must start empty, not inherit Dubai's rows")
+        _append_plan_rows(nigeria_h, [_room("Standard Room", ["https://n/1.jpg"], cats)],
+                          "0", 1, "http", 0, 0, nigeria_scope)
+        _, nigeria_ids = _load_plan(nigeria_scope)
+        assert nigeria_ids == {900001}, (
+            f"Phase 2 of the Nigeria run would have committed {nigeria_ids}, "
+            f"which must be exactly {{900001}} -- any Dubai id here IS D-76")
+
+        # -- back to Dubai: h1/h2 must still be there, untouched --------------
+        by_hotel_back, ids_back = _load_plan(scope)
+        assert ids_back == {501, 502}, (
+            f"returning to Dubai's own scope after an unrelated city ran in "
+            f"between must resume exactly as before, not re-discover from "
+            f"scratch: got {ids_back}")
+        assert by_hotel_back == by_hotel, (
+            "Dubai's checkpoint changed shape after an unrelated city's run")
+
         # -- a torn last row is dropped, not fatal, same tolerance as ledger.py
-        with open(PLAN_CACHE, "a", encoding="utf-8") as f:
+        with open(_plan_cache_path(scope), "a", encoding="utf-8") as f:
             f.write("1280,Dubai,999,torn-slug,Torn Hote")   # short row, no newline
         by_hotel3, planned_ids3 = _load_plan(scope)
         assert 501 in by_hotel3 and 502 in by_hotel3, (
             "a torn trailing row lost the good ones")
         assert 999 not in planned_ids3, "a torn row was accepted as a real hotel"
     finally:
-        globals()["CACHE"], globals()["PLAN_CACHE"] = real_cache, real_plan
+        globals()["CACHE"] = real_cache
         shutil.rmtree(_tmpdir, ignore_errors=True)
     print("OK: plan checkpoint round-trips rooms (images, size, category, "
-          "provenance), skips already-planned hotels on resume, and is "
-          "invalidated by a different hotel set OR a changed matching config")
+          "provenance), skips already-planned hotels on resume, keys itself "
+          "by hotel set AND matching config so a different scope can neither "
+          "read nor destroy another's rows, and survives an unrelated city "
+          "running in between (D-76)")
     _selftest_phase2_resume()
 
 
@@ -2357,7 +2438,7 @@ def _selftest_booking_fill(cats):
                                     existing={key: {"has_image": True}})
         assert n5 == 0 and note5 == "no gaps" and not asked, (note5, asked)
         # ...but the same room with NO database picture must still be asked
-        n6, _note6, _ = booking_fill(None, hotel, [imaged], cats,
+        _n6, _note6, _ = booking_fill(None, hotel, [imaged], cats,
                                      existing={key: {"has_image": False}})
         assert asked, "a genuinely imageless room was not offered to the second source"
 
@@ -2696,7 +2777,7 @@ def _selftest_mapping(cats):
         "Deluxe Room – Breakfast Included", "Deluxe Room [Deluxe Room NRHB]")]
     one_ag = [{"agoda_room_id": 1, "room_name": "Deluxe Room",
                "images": ["a", "b"], "size_sqft": 300}]
-    vpub, vrev, vun = map_rooms(variants, one_ag, cats)
+    vpub, _vrev, vun = map_rooms(variants, one_ag, cats)
     assert len(vpub) == len(variants), (
         f"{len(variants)} rate-plan variants collapsed to {len(vpub)} published "
         f"rows -- the others would keep their wrong photo")
@@ -3903,9 +3984,10 @@ def main(argv=None):
     # Booking, decide what would be published. No image is downloaded here
     # and nothing is written to MySQL -- this phase is exactly what a
     # --dry-run has always computed, just no longer entangled with the slow
-    # part. Its output is a PLAN, checkpointed per hotel (see PLAN_CACHE), so
-    # a crash here loses at most the hotel in flight and a re-invocation skips
-    # straight past anything already discovered.
+    # part. Its output is a PLAN, checkpointed per hotel into this scope's own
+    # file (see _plan_cache_path), so a crash here loses at most the hotel in
+    # flight and a re-invocation skips straight past anything already
+    # discovered.
     # ======================================================================
     # Every hotel's already-published rooms, in ONE query, before discovery
     # starts. This replaces a per-hotel read that was the single largest source
@@ -3932,11 +4014,14 @@ def main(argv=None):
                   f"that already have a picture, nothing else changes")
 
     plan_scope = _plan_scope(todo)
-    planned_rows, planned_ids = _load_plan(plan_scope)
+    # `plan_scope` is passed explicitly to every read/append below (here, in
+    # the discovery loop, and again at Phase 2's commit-time read) -- there is
+    # no shared mutable path for a different city or config to collide with,
+    # because each scope resolves its OWN file (_plan_cache_path).
+    _planned_rows, planned_ids = _load_plan(plan_scope)
     if planned_ids:
         print(f"\nplan checkpoint: {len(planned_ids)} hotel(s) already "
               f"discovered, resuming")
-    _save_plan_scope(plan_scope)
     # Set here, not just inside the loop below: work1 can be entirely empty
     # (every hotel in `todo` already check-pointed by a prior run), in which
     # case the loop body never executes at all and this default is what
@@ -4143,7 +4228,7 @@ def main(argv=None):
                     {"id": h["id"], "city_id": h["city_id"],
                      "city_name": destination, "slug": h["slug"], "name": h["name"]},
                     to_publish, bm_label, len(ag_rooms), source,
-                    len(review), len(unmatched))
+                    len(review), len(unmatched), plan_scope)
                 counts["hotels_mapped"] += 1
                 # "Mapped" says a plan was produced, NOT that anything was
                 # found. A hotel whose every room came back without a single
@@ -4221,9 +4306,10 @@ def main(argv=None):
     counts["rooms_unmatched"] = len(unmatched_rows)
 
     # ==========================================================================
-    # THE GATE. Everything Phase 2 needs is now either check-pointed to
-    # PLAN_CACHE (this invocation's own discoveries) or was already there from
-    # a prior interrupted run (planned_rows, loaded above) -- so the summary
+    # THE GATE. Everything Phase 2 needs is now either check-pointed to this
+    # scope's own file (this invocation's own discoveries) or was already
+    # there from a prior interrupted run (planned_rows, loaded above) -- so
+    # the summary
     # below is not a forecast computed separately from Phase 2's real work, it
     # is read from the exact same counters Phase 2 will finish updating. A
     # dry run always proceeds (Phase 2 writes nothing in that mode, so there is
@@ -4521,7 +4607,22 @@ def main(argv=None):
             _STOP = True             # `global _STOP` already declared above
             print("\n  aborted immediately during commit -- writing whatever "
                   "results were already earned before exiting")
-        hotels_reached = i if work2 else hotels_planned
+        # NOT `i` (how far Phase 2's OWN loop over work2 walked). work2 only
+        # ever holds hotels that had something to PUBLISH -- any hotel Phase 1
+        # discovered but found empty never enters it at all, by construction
+        # (the discovery loop `continue`s before ever check-pointing one). So
+        # len(work2) < hotels_planned on almost every ordinary, uninterrupted
+        # run, not just an aborted one -- using `i` here reported 1 of 3 for a
+        # Nigeria run where Phase 2 committed everything it was ever asked to,
+        # and the summary's own [MISMATCH] check (correctly) caught the lie
+        # against `counts`, which is tallied over the FULL Phase 1 population
+        # regardless of how many hotels Phase 2 actually had to walk.
+        # `hotels_planned` is that same population, so it is right in every
+        # case: an ordinary full run, a run stopped early in PHASE 1 (already
+        # handled by the `if not proceed` branch above, unchanged), and a run
+        # stopped early in PHASE 2 (nothing after Phase 1 changes how many
+        # hotels were discovered, only how many of THOSE get published).
+        hotels_reached = hotels_planned
     # `hotels_reached` and `hotels_planned` are both set by this point --
     # the former by whichever of the two branches above ran, the latter right
     # after Phase 1 -- and the report section below reuses the name `i` for
@@ -4698,14 +4799,22 @@ def main(argv=None):
     # A 93% reduction in requests -- which is the single largest lever the
     # pipeline has for NOT tripping Agoda's limiter in the first place, and it
     # was being thrown away at the end of every successful run.
+    #
+    # ONLY this run's own plan file -- NOT a blanket sweep of every non-agoda_
+    # file in CACHE. That used to be exactly that: `for _f in os.listdir(CACHE):
+    # ... os.remove(...)`, which deletes every OTHER scope's plan checkpoint
+    # too, as an unrelated side effect of THIS city finishing successfully.
+    # Caught live 2026-08-21: a from-scratch Dubai plan (168 hotels, carefully
+    # migrated to the per-scope naming D-77 introduced minutes earlier) was
+    # silently wiped by an unrelated 3-hotel Benin City, Nigeria run completing
+    # normally -- the exact "Dubai, then Nigeria, then Dubai" resumability
+    # D-77 was built and selftested to guarantee, defeated one call site later
+    # by a sweep that was never scoped to begin with. See D-79.
     if proceed and not (_STOP or agoda_dead):
-        for _f in os.listdir(CACHE) if os.path.isdir(CACHE) else []:
-            if _f.startswith("agoda_"):
-                continue                     # keep: request cache, self-expiring
-            try:
-                os.remove(os.path.join(CACHE, _f))
-            except OSError:
-                pass
+        try:
+            os.remove(_plan_cache_path(plan_scope))
+        except OSError:
+            pass
 
     status = ("finished (DEGRADED -- agoda was unreachable at the end)" if agoda_dead else
               "STOPPED (aborted immediately)" if aborted_immediately else
