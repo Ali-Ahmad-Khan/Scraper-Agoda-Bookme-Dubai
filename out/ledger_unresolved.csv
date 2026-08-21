@@ -209,3 +209,5 @@ row_id,v2_common_hotel_id,city_id,slug,name,run_id,reason,detail,last_attempted_
 208,452272,1280,le-meridien-fairway-697,le meridien fairway,20260821-122343,no_agoda_match,rejected 'Le Méridien Towers Makkah' name=73% strict=50% dist=1639.32km same_city=False,2026-08-21T14:41:30
 209,452280,1280,al-nakheel-hotel-apartments-932,al nakheel hotel apartments,20260821-122343,no_rooms_any_date,"agoda source=http, bookme rooms=0",2026-08-21T14:45:37
 210,452285,1280,radisson-blu-hotel-dubai-media-city-535,radisson blu hotel dubai media city,20260821-122343,no_rooms_any_date,"agoda source=http, bookme rooms=0",2026-08-21T14:48:37
+211,452321,1280,royal-plaza-773,royal plaza,20260821-122343,no_rooms_any_date,"agoda source=http, bookme rooms=0",2026-08-21T14:52:48
+212,452366,1280,ascott-park-place-dubai-185,ascott park place dubai,20260821-122343,no_rooms_any_date,"agoda source=http, bookme rooms=0",2026-08-21T15:02:26

@@ -1849,10 +1849,19 @@ also reduce any future proxy bill:**
    the hotels that end up unmatched anyway. So the saving is real but modest,
    and it is bought with recall.
 
-   Still worth measuring before touching: the question is *which rank actually
-   wins*, and that needs instrumenting the match loop to record it. Not
-   measurable from the existing artifacts, contrary to what this entry first
-   claimed — they record the winner, not its rank among the candidates.
+   **WITHDRAWN 2026-08-21, on operator instruction — `top_n` stays at 5.** The
+   operator's objection is the correct one and outranks the saving: a lower
+   `top_n` risks never fetching a candidate that would have scored higher than
+   the ones examined. That is a recall loss traded for ~14% of a wait, on a
+   pipeline whose entire value is finding the right property.
+
+   Worth recording *why* the objection lands so cleanly: `match_hotel` examines
+   **every one** of the top_n candidates — there is no early break, all paths
+   `continue`, and the winner is the running best by `(distance, -name_score)`.
+   That break existed once and was removed for this exact reason (see the
+   comment at the `viable`/`ranked` filter). Narrowing the slice would
+   reintroduce, at the ranking boundary, the very failure the break's removal
+   fixed inside the loop. Lever (2) below is unaffected and still stands.
 2. **Cut bytes per request** (attacks *proxy cost*, not time). 803 KB for
    `is_nha`, lat, lon and city_id is the pipeline's worst payload-to-value
    ratio anywhere. If a lighter endpoint carries the same four fields, the

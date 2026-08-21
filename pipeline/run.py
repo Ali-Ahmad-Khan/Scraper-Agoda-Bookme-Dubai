@@ -4155,10 +4155,21 @@ def main(argv=None):
                 # 7 of the 8 agoda-blind ones. See D-75.
                 if not with_photo:
                     counts["hotels_mapped_no_photo"] += 1
+                # This line mixes two STAGES and used to hide it. `unmatched`
+                # is an Agoda-stage number (computed by map_rooms, before
+                # booking_fill runs), while `with_photo` is counted after
+                # Booking has already rescued some of those same rooms. So
+                # "0 agoda rooms ... 4 with photo ... 6 unmatched" read as a
+                # contradiction, and worse, as if Booking had never been tried
+                # -- when in fact Booking is exactly where those 4 photos came
+                # from. Naming the stage on the unmatched count, and stating
+                # how many rooms are STILL bare, removes both readings.
                 print(f"{tag} bookme={bm_label:>10} agoda={len(ag_rooms):>2}"
-                      f"({source}) -> mapped {len(to_publish)} rooms "
-                      f"({with_photo} with candidate photo), {len(review)} review, "
-                      f"{len(unmatched)} unmatched")
+                      f"({source}) -> planned {len(to_publish)} rooms, "
+                      f"{with_photo} photographed "
+                      f"({len(to_publish) - with_photo} still bare), "
+                      f"{len(review)} review, "
+                      f"{len(unmatched)} unmatched-by-agoda")
             except KeyboardInterrupt:
                 raise
             except Exception as e:
