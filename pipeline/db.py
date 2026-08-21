@@ -241,6 +241,17 @@ def hotels(conn, city_ids, limit=None, skip_ids=()):
     with conn.cursor() as cur:
         _sql(cur, q, (tuple(city_ids),))
         rows = cur.fetchall()
+    # `limit` selects a WINDOW of the catalogue, not a quota of work to find.
+    # It is applied to the ordered rows BEFORE skip_ids, so `--limit 1500`
+    # always means the same 1500 hotels no matter what the ledger already
+    # holds. The other way round -- skipping first, then counting to 1500 --
+    # makes the window slide further down the catalogue on every re-run as the
+    # ledger fills, so no two runs cover the same hotels and a result can never
+    # be reproduced or backtracked. Skipped hotels are subtracted from the
+    # window, not replaced: a run that skips 200 already-fresh hotels processes
+    # 1300, and those 1300 are a subset of the same fixed 1500.
+    if limit:
+        rows = rows[:limit]
     out = []
     for r in rows:
         if r["id"] in skip_ids:
@@ -248,8 +259,6 @@ def hotels(conn, city_ids, limit=None, skip_ids=()):
         r["lat"] = float(r["lat"]) if r["lat"] is not None else None
         r["lon"] = float(r["lon"]) if r["lon"] is not None else None
         out.append(r)
-        if limit and len(out) >= limit:
-            break
     return out
 
 

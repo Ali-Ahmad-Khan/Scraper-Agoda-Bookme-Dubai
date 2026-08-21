@@ -76,6 +76,17 @@ NAME_OK = 72          # recall metric: floor to bother fetching a candidate
 NAME_STRONG = 90      # recall metric, used alongside a plausible distance
 NAME_STRICT = 88      # precision metric, required when relying on city alone
 
+# How closely an individually-listed rental's title must match the Bookme row's
+# before we accept it as the SAME listing rather than a hotel namesake. Its own
+# constant, not NAME_STRICT, because it answers a different question -- "is this
+# the same listing" rather than "is this the same hotel" -- and is measured
+# against a different population. Calibrated on run 20260820-061304's 430 isNHA
+# rejections: name-dropping rentals top out at strict 59, genuine same-listing
+# pairs run 90-100, so anywhere in 60..90 separates them. 90 is the
+# conservative end of that gap; dropping to 88 buys only 5 more hotels and
+# starts admitting generic titles ("Elegant 1Bedroom Apartment").
+NHA_SAME_LISTING_STRICT = 90
+
 # How close a Bookme search result must sit to the DB row to be called the same
 # hotel when the slug ladder has already failed. Tighter than FAR_KM because
 # here we are identifying a hotel against our OWN authoritative coordinates,
@@ -827,6 +838,15 @@ def match_hotel(s, h, check_in, check_out, city=None, destination=None,
         key=lambda c: (0 if (city is not None and c.get("city_id") == city) else 1,
                        -match.score(bn, match.norm(c["agoda_name"]))))
     best, best_reject = None, None
+    # The FIRST rejection is rarely the interesting one. Candidates are examined
+    # in ranked order, so a categorical veto on candidate 1 ("individually-listed
+    # accommodation") would mask a scored near-miss on candidate 4 -- and the
+    # scored one is the whole diagnosis, because it carries the numbers that say
+    # how close we came. Run 20260820-061304's revisit file reported the
+    # masking reason for 430 hotels, which is why they read as a single
+    # systematic failure when they were several. Kept separately and preferred
+    # on the way out; costs one variable.
+    near_reject = None
     fetch_failed = considered = 0
     for c in ranked[:top_n]:
         ns = match.score(bn, match.norm(c["agoda_name"]))
@@ -855,10 +875,24 @@ def match_hotel(s, h, check_in, check_out, city=None, destination=None,
         if not p:
             best_reject = best_reject or "agoda property returned no data"
             continue
-        if p.get("is_nha"):
+        # isNHA rules out a rental that name-drops a hotel. It does NOT rule out
+        # a rental that IS the Bookme row -- Dubai's catalogue is full of them
+        # ("Nasma Luxury Stays - Limestone House"), and a blanket veto here made
+        # them permanently unmatchable. 430 of run 20260820-061304's 875
+        # no_agoda_match hotels were rejected on this line; 124 of those had a
+        # candidate whose name IS the Bookme name. See match.same_listing.
+        if p.get("is_nha") and not match.same_listing(
+                bn, match.norm(c["agoda_name"]), NHA_SAME_LISTING_STRICT,
+                drop=match.norm(dest) if dest else None):
+            # The agoda id goes in the REASON, not just the name. A rejection a
+            # human cannot re-open is a rejection they have to re-derive: this
+            # band is genuinely ambiguous (measured -- see D-66), so the operator
+            # adjudicating it needs the property, not a description of it.
             best_reject = best_reject or (
                 f"rejected {c['agoda_name']!r}: individually-listed accommodation "
-                f"({p.get('accommodation_type')}), not the hotel")
+                f"({p.get('accommodation_type')}), not the hotel "
+                f"[agoda {c['agoda_id']} "
+                f"https://www.agoda.com/search?hotel={c['agoda_id']}]")
             continue
 
         d = agoda.km(h.get("lat"), h.get("lon"), p["lat"], p["lon"])
@@ -866,15 +900,24 @@ def match_hotel(s, h, check_in, check_out, city=None, destination=None,
         same_city = city is not None and p.get("city_id") == city
         conf = _confidence(ns, d, strict, same_city)
         if not conf:
-            best_reject = best_reject or (
-                f"rejected {c['agoda_name']!r} name={ns:.0f}% strict={strict:.0f}% "
-                f"dist={'?' if d is None else f'{d:.2f}km'} same_city={same_city}")
+            scored = (f"rejected {c['agoda_name']!r} name={ns:.0f}% "
+                      f"strict={strict:.0f}% "
+                      f"dist={'?' if d is None else f'{d:.2f}km'} "
+                      f"same_city={same_city}")
+            # Keep the CLOSEST near-miss, not the first: ranked order puts
+            # same-city candidates first, but the tightest distance can appear
+            # anywhere in the slice.
+            if near_reject is None or (d is not None and d < near_reject[0]):
+                near_reject = (float("inf") if d is None else d, scored)
             continue
         key = (float("inf") if d is None else d, -ns)
         if best is None or key < best[0]:
             best = (key, c, p, ns, d, conf)
 
     if best is None:
+        # A scored near-miss outranks a categorical veto: it means we reached a
+        # plausible candidate and can say by how much it missed.
+        best_reject = (near_reject[1] if near_reject else None) or best_reject
         # "We could not ask" vs "we asked and it is not there" -- the same
         # empty result, opposite meanings. If every candidate we looked at
         # failed to fetch, this is the former and must be retried, not filed.
@@ -1710,6 +1753,8 @@ def selftest():
     _selftest_agoda_breaker()
     _selftest_city_aware_match()
     _selftest_schema_adaptive()
+    _selftest_limit_window()
+    _selftest_identity_rotation()
     _selftest_plan_checkpoint(cats)
     _selftest_cli_targeting()
 
@@ -1798,6 +1843,79 @@ def _selftest_schema_adaptive():
     finally:
         db._ROOM_COLS = saved
     print("OK: v2_rooms writes adapt to a schema with or without size_sqft")
+
+
+def _selftest_limit_window():
+    """--limit selects a fixed WINDOW, so a run can be reproduced.
+
+    The bug this pins: skip_ids used to be filtered BEFORE the limit was
+    counted, so `--limit N` meant "N hotels not already done". Every re-run
+    then covered a different, further-along slice of the catalogue as the
+    ledger filled, and no result could be reproduced or backtracked. The window
+    must depend on the catalogue alone -- never on run history.
+    """
+    class FakeCur:
+        def __enter__(self): return self
+        def __exit__(self, *a): return False
+        def execute(self, sql, args=None): pass
+        def fetchall(self):
+            return [{"id": i, "slug": f"h{i}", "name": f"H{i}", "address": "a",
+                     "lat": 25.0, "lon": 55.0, "city_id": 1280}
+                    for i in range(1, 11)]
+
+    class FakeConn:
+        def cursor(self): return FakeCur()
+
+    conn = FakeConn()
+    assert [h["id"] for h in db.hotels(conn, [1280], limit=4)] == [1, 2, 3, 4]
+    # The SAME window, minus what is already fresh -- not a slide onto 5..8.
+    got = [h["id"] for h in db.hotels(conn, [1280], limit=4, skip_ids={2, 3})]
+    assert got == [1, 4], f"limit window slid with the ledger: {got}"
+    # Ledger growth must never pull in a hotel from outside the window.
+    for skipped in ({1}, {1, 2}, {1, 2, 3, 4}):
+        ids = [h["id"] for h in db.hotels(conn, [1280], limit=4,
+                                          skip_ids=skipped)]
+        assert set(ids) <= {1, 2, 3, 4}, (skipped, ids)
+    assert db.hotels(conn, [1280], limit=4, skip_ids={1, 2, 3, 4}) == []
+    assert len(db.hotels(conn, [1280])) == 10          # no limit, whole city
+    print("OK: --limit is a fixed catalogue window, unchanged by ledger state")
+
+
+def _selftest_identity_rotation():
+    """Proactive rotation: a new jar AND a new header, together, on the break.
+
+    Rotating the User-Agent while keeping the cookie jar would present as one
+    browser that changed identity mid-session -- a stronger automation signal
+    than never rotating (see agoda.UA_POOL). Both move or neither does.
+    """
+    s = agoda.session()
+    ua0 = s.headers["User-Agent"]
+    s.cookies.set("sess", "1", domain="agoda.com")
+    agoda.refresh_identity(s)
+    assert len(s.cookies) == 0, "identity rotated but the cookie jar survived"
+    assert s.headers["User-Agent"] != ua0, "jar cleared but the header did not move"
+    # Cycles the pool rather than picking at random, so a run never replays the
+    # identity it just retired.
+    seen = {s.headers["User-Agent"]}
+    for _ in range(len(agoda.UA_POOL) - 1):
+        agoda.refresh_identity(s)
+        seen.add(s.headers["User-Agent"])
+    assert len(seen) == len(agoda.UA_POOL), f"pool not cycled: {len(seen)}"
+
+    # _pace signals the break so the caller can rotate across the idle gap --
+    # and signals it ONLY on the break, or every request would rotate.
+    saved_every, saved_break = agoda.SESSION_BREAK_EVERY, agoda.SESSION_BREAK_S
+    saved_since, saved_interval = agoda._since_break, agoda._interval
+    try:
+        agoda.SESSION_BREAK_EVERY, agoda.SESSION_BREAK_S = 3, 0
+        agoda._since_break, agoda._interval = 0, 0.0
+        fired = [agoda._pace() for _ in range(6)]
+        assert fired == [False, False, True, False, False, True], fired
+    finally:
+        agoda.SESSION_BREAK_EVERY, agoda.SESSION_BREAK_S = saved_every, saved_break
+        agoda._since_break, agoda._interval = saved_since, saved_interval
+    print(f"OK: identity rotates jar+header together, cycling "
+          f"{len(agoda.UA_POOL)} UAs, fired only on the session break")
 
 
 def _selftest_plan_checkpoint(cats):
@@ -3079,7 +3197,8 @@ def _row(label, value, width=28, note=""):
     print(f"  {label:<{width}} {value}" + (f"   {note}" if note else ""))
 
 
-def _print_human_summary(counts, hotels_attempted, destination, rooms_from):
+def _print_human_summary(counts, hotels_attempted, destination, rooms_from,
+                         published_label="published"):
     """Scannable in 5 seconds, cold, a year from now -- key: value rows,
     `x/y (z%)` ratios, tree branches for a breakdown, `[ok]`/`[MISMATCH]`
     instead of a sentence confirming arithmetic. No paragraphs.
@@ -3116,18 +3235,49 @@ def _print_human_summary(counts, hotels_attempted, destination, rooms_from):
     print(f"\n{destination} · {total} hotels selected")
     print("-" * 46)
     print("HOTELS")
-    _row("published", f"{published}/{total} {pct(published, total)}")
+    _row(published_label, f"{published}/{total} {pct(published, total)}")
     _row("  ├─ agoda identified it", via_agoda)
     _row("  └─ agoda-blind (bookme+booking only)", agoda_blind)
-    _row("not published", f"{total - published}/{total}")
-    _row("  ├─ no listing on any platform", no_listing)
-    _row("  ├─ listed but zero rooms", zero_rooms)
+    # Deliberately placed under the mapped total it qualifies, not in the
+    # ROOMS block. Room-level photo coverage is already reported there; this
+    # is the different and harsher fact that a whole HOTEL came away with
+    # nothing, which a room-level percentage averages away.
+    nophoto = counts["hotels_mapped_no_photo"]
+    if nophoto:
+        _row("  (of which found NO photo at all)", nophoto,
+             note="-- rooms planned, zero imagery; mostly agoda-blind")
+    # Mirrors published_label: a plan-only gate must not print "not published"
+    # against a "mapped" total, or the two halves describe different phases.
+    _row("not mapped" if published_label.startswith("mapped") else "not published",
+         f"{total - published}/{total}")
+    # "on any platform" WOULD BE A LIE. These hotels take the `not bm_rooms`
+    # continue inside the no-agoda-match branch, which fires BEFORE the Booking
+    # takeover -- Booking is never asked about them. Only Agoda was.
+    # Every row names the SOURCES it actually tested. "either/any platform" is
+    # unreadable here because the three sources are consulted in different
+    # combinations per branch: this row asked Agoda alone, the next asked Agoda
+    # and Bookme, and neither reached Booking.
+    _row("  ├─ no agoda listing; bookme had 0 rooms", no_listing,
+         note="-- booking never asked (it only fills rooms bookme sells)")
+    _row("  ├─ agoda listed it; 0 rooms on agoda AND bookme", zero_rooms)
     _row("  └─ error", errored)
     _row("total", f"{hotel_sum}/{total}", note=ok)
+    # BOTH buckets above require `not bm_rooms` -- 801 via the no-agoda-match
+    # continue, 167 via `not ag_rooms and not bm_rooms`. Reporting that fact
+    # under only one of them (as an earlier version did) reads as if the other
+    # were a different kind of failure. It is not: neither has anything to map
+    # onto. Errors are excluded -- a hotel that crashed may well have had rooms.
+    no_inv = counts["hotels_no_bookme_rooms"] + zero_rooms
+    _row("(info) bookme itself returned 0 rooms",
+         f"{no_inv}/{total} {pct(no_inv, total)}",
+         note="-- BOTH rows above; nothing to map onto, no matcher recovers these")
     if rooms_from == "both":
+        # NOT "bookme had nothing live". This counts hotels the harvest never
+        # got an ANSWER for -- an open question, not a stated zero. A hotel that
+        # answered "no rooms" is in the line above, not this one.
         u = counts["hotels_unresolved_on_bookme"]
-        _row("(info) bookme had nothing live", f"{u}/{total}",
-             note="-- not a failure; agoda can cover alone")
+        _row("(info) bookme never answered", f"{u}/{total}",
+             note="-- unanswered, NOT 'zero rooms'; agoda can cover alone")
 
     total_rooms = (counts["rooms_with_candidate_images"]
                   + counts["rooms_without_candidate_images"])
@@ -3140,7 +3290,7 @@ def _print_human_summary(counts, hotels_attempted, destination, rooms_from):
     room_sum = with_photo + without_photo
     room_ok = "[ok]" if room_sum == total_rooms else f"[MISMATCH != {total_rooms}]"
 
-    print(f"\nROOMS · {total_rooms} listings / {published} published hotels")
+    print(f"\nROOMS · {total_rooms} listings across {published} hotels")
     print("  (one listing per Bookme SELLABLE NAME -- one physical room sold on "
           "several rate plans = several listings, one shared photo set)")
     print("-" * 46)
@@ -3645,7 +3795,13 @@ def main(argv=None):
               # of a run double-count: a hotel can be BOTH "no_agoda_match" AND
               # "hotels_done" at once, and nothing said so.
               "hotels_agoda_blind_attempted": 0,
-              "hotels_agoda_blind_done": 0}
+              "hotels_agoda_blind_done": 0,
+              # Hotels with no sellable Bookme inventory on ANY probed shape.
+              # A subset of hotels_no_agoda_match, not an addition to it.
+              "hotels_no_bookme_rooms": 0,
+              # Mapped, but not one room found a candidate photo. A subset of
+              # hotels_mapped, not an addition to it.
+              "hotels_mapped_no_photo": 0}
     # hotels_mapped vs hotels_done: discovery succeeding and the DB commit
     # succeeding are different claims, now genuinely separated by phase --
     # hotels_mapped is set in Phase 1 (this hotel produced a plan, whether or
@@ -3897,6 +4053,16 @@ def main(argv=None):
                     # of the hotel being skipped outright.
                     ag_rooms, source = [], "no_agoda_match"
                     if not bm_rooms:
+                        # Counted SEPARATELY from the match failure that shares
+                        # this branch. Both end the hotel, but they are not the
+                        # same fact and they do not have the same remedy: "Agoda
+                        # has no listing" is a matching outcome, while "Bookme
+                        # sells no rooms here" is a property of our own
+                        # catalogue that no matcher can improve. Reporting them
+                        # as one number made run 20260820-061304 read as 35%
+                        # matched when 65% of the window had nothing to map at
+                        # all -- see D-67.
+                        counts["hotels_no_bookme_rooms"] += 1
                         print(f"{tag} no agoda match, no bookme rooms either: "
                               f"{reason[:44]}")
                         # The breaker runs BEFORE this continue. It used to sit
@@ -3917,7 +4083,7 @@ def main(argv=None):
                         detail = f"agoda source={source}, bookme rooms=0"
                         revisit_row("no_rooms_any_date", detail)
                         led.mark_unresolved(h, run_id, "no_rooms_any_date", detail)
-                        print(f"{tag} no rooms on either platform after "
+                        print(f"{tag} no rooms on agoda or bookme after "
                               f"{len(probe_log)} probes")
                         continue
 
@@ -3979,6 +4145,16 @@ def main(argv=None):
                     to_publish, bm_label, len(ag_rooms), source,
                     len(review), len(unmatched))
                 counts["hotels_mapped"] += 1
+                # "Mapped" says a plan was produced, NOT that anything was
+                # found. A hotel whose every room came back without a single
+                # candidate photograph delivered no imagery at all, which is
+                # the one thing this pipeline exists to deliver -- and it still
+                # increments hotels_mapped. Counted separately so the headline
+                # cannot quietly include hotels that got nothing. Measured on
+                # run 20260821-122343: 10 of the first 92 mapped hotels, and
+                # 7 of the 8 agoda-blind ones. See D-75.
+                if not with_photo:
+                    counts["hotels_mapped_no_photo"] += 1
                 print(f"{tag} bookme={bm_label:>10} agoda={len(ag_rooms):>2}"
                       f"({source}) -> mapped {len(to_publish)} rooms "
                       f"({with_photo} with candidate photo), {len(review)} review, "
@@ -4054,7 +4230,11 @@ def main(argv=None):
             {**counts, "hotels_done": counts["hotels_mapped"],
              "hotels_agoda_blind_done": counts["hotels_agoda_blind_attempted"]},
             len(planned_ids | {h["id"] for h in todo[:hotels_planned]}),
-            destination, a.rooms_from)
+            destination, a.rooms_from,
+            # At the gate NOTHING has been published -- no image fetched, no
+            # row written. Saying "published" here and again after Phase 2
+            # makes a plan-only run read exactly like a completed one.
+            published_label="mapped (nothing published yet)")
         print("\n(discovery only -- no image downloaded, nothing written to "
              "MySQL yet)")
     proceed = have_plan and not aborted_immediately and not a.plan_only

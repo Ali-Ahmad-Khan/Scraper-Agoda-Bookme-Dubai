@@ -180,3 +180,32 @@ row_id,v2_common_hotel_id,city_id,slug,name,run_id,reason,detail,last_attempted_
 179,452184,1280,time-crystal-hotel-apartments,time crystal hotel apartments,20260820-161210,no_rooms_any_date,"agoda source=http, bookme rooms=0",2026-08-20T17:51:11
 180,452201,1280,downtown-hotel-267,downtown hotel,20260820-161210,no_agoda_match,rejected 'Millennium Plaza Downtown Hotel Dubai' name=100% strict=55% dist=6.03km same_city=True,2026-08-20T17:51:52
 181,452071,1280,pearl-residence-hotel-apartments,pearl residence hotel apartments,20260820-161210,no_agoda_match,rejected 'North Pearl Residence Apartments' name=91% strict=91% dist=2258.12km same_city=False,2026-08-20T17:53:56
+182,451905,1280,al-raya-hotel-apartments-106,al raya hotel apartments,20260821-122343,no_agoda_match,rejected 'Al Raya Apartments' name=100% strict=86% dist=2557.31km same_city=False,2026-08-21T12:43:12
+183,451907,1280,al-waleed-palace-hotel-apartments-oud-metha,al waleed palace hotel apartments oud metha,20260821-122343,no_agoda_match,rejected 'Dunes Hotel Apartment Oud Metha' name=73% strict=70% dist=0.86km same_city=True,2026-08-21T12:43:20
+184,451912,1280,pride-hotel-apartments,pride hotel apartments,20260821-122343,no_rooms_any_date,"agoda source=http, bookme rooms=0",2026-08-21T12:44:16
+185,451919,1280,jood-palace-hotel-dubai-189,jood palace hotel dubai,20260821-122343,no_rooms_any_date,"agoda source=http, bookme rooms=0",2026-08-21T12:45:34
+186,451943,1280,lavender-hotel-al-nahda-dubai,lavender hotel al nahda dubai,20260821-122343,no_rooms_any_date,"agoda source=http, bookme rooms=0",2026-08-21T12:51:01
+187,451956,1280,copthorne-lakeview-executive-apartments-dubai-green-community-289,"copthorne lakeview executive apartments dubai, green community",20260821-122343,no_agoda_match,rejected 'Copthorne Hotel and Apartments Queenstown Lakeview' name=73% strict=58% dist=13752.29km same_city=False,2026-08-21T12:55:26
+188,451972,1280,emirates-concorde-hotel-apartments,emirates concorde hotel & apartments,20260821-122343,no_rooms_any_date,"agoda source=http, bookme rooms=0",2026-08-21T12:58:03
+189,451995,1280,panorama-bur-dubai-hotel,panorama bur dubai hotel,20260821-122343,no_rooms_any_date,"agoda source=http, bookme rooms=0",2026-08-21T13:08:15
+190,452010,1280,deira-suites-hotel-apartment-26,deira suites hotel apartment,20260821-122343,no_rooms_any_date,"agoda source=http, bookme rooms=0",2026-08-21T13:12:07
+191,452012,1280,al-bustan-residence-hotel-apartments,al bustan residence hotel apartments,20260821-122343,no_agoda_match,no candidate above name threshold,2026-08-21T13:12:12
+192,452067,1280,delmon-palace-hotel,delmon palace hotel,20260821-122343,no_agoda_match,rejected 'LE PARADISE PALACE HOTEL Deira Dubai Al Rigga' name=77% strict=47% dist=0.35km same_city=True,2026-08-21T13:37:47
+193,452071,1280,pearl-residence-hotel-apartments,pearl residence hotel apartments,20260821-122343,no_agoda_match,rejected 'North Pearl Residence Apartments' name=91% strict=91% dist=2258.12km same_city=False,2026-08-21T13:39:56
+194,452076,1280,the-address-montgomerie-dubai,the address montgomerie dubai,20260821-122343,no_agoda_match,rejected 'The Weekend Address' name=73% strict=50% dist=1846.80km same_city=False,2026-08-21T13:41:56
+195,452082,1280,ramee-hotel-apartments-998,ramee hotel apartments,20260821-122343,no_rooms_any_date,"agoda source=http, bookme rooms=0",2026-08-21T13:45:32
+196,452083,1280,burjuman-arjaan-by-rotana-dubai,burjuman arjaan by rotana dubai,20260821-122343,no_rooms_any_date,"agoda source=http, bookme rooms=0",2026-08-21T13:46:17
+197,452093,1280,jumeirah-burj-al-arab-dubai-775,jumeirah burj al arab dubai,20260821-122343,no_rooms_any_date,"agoda source=http, bookme rooms=0",2026-08-21T13:49:34
+198,452124,1280,the-bristol-hotel-dubai-195,the bristol hotel dubai,20260821-122343,no_agoda_match,rejected 'The Bristol Hotel (formerly JW Marriott Hotel Deira)' name=85% strict=55% dist=0.66km same_city=True,2026-08-21T13:52:38
+199,452145,1280,jumeirah-creekside-dubai-579,jumeirah creekside dubai,20260821-122343,no_agoda_match,no candidate above name threshold,2026-08-21T13:54:14
+200,452153,1280,avari-hotel-apartments,avari hotel apartments,20260821-122343,no_agoda_match,"rejected ""Avari Apartments - Gray's Collection"" name=84% strict=68% dist=5475.37km same_city=False",2026-08-21T13:54:58
+201,452177,1280,mercure-hotel-suites-apartments-dubai-barsha-heights,mercure hotel suites & apartments dubai barsha heights,20260821-122343,no_agoda_match,no candidate above name threshold,2026-08-21T13:56:27
+202,452184,1280,time-crystal-hotel-apartments,time crystal hotel apartments,20260821-122343,no_rooms_any_date,"agoda source=http, bookme rooms=0",2026-08-21T13:57:29
+203,452201,1280,downtown-hotel-267,downtown hotel,20260821-122343,no_agoda_match,rejected 'Sun and Sands Downtown Hotel' name=100% strict=67% dist=1.80km same_city=True,2026-08-21T13:58:15
+204,452232,1280,jumeirah-beit-al-bahar,jumeirah beit al bahar,20260821-122343,no_agoda_match,no candidate above name threshold,2026-08-21T14:07:26
+205,452245,1280,akas-inn-hotel-apartment-593,akas inn hotel apartment,20260821-122343,no_rooms_any_date,"agoda source=http, bookme rooms=0",2026-08-21T14:14:20
+206,452268,1280,arabian-dreams-hotel-apartments-765,arabian dreams hotel apartments,20260821-122343,no_rooms_any_date,"agoda source=http, bookme rooms=0",2026-08-21T14:41:06
+207,452270,1280,oyo-capital-o-167-moon-valley-hotel-apartment,oyo capital o 167 moon valley hotel apartment,20260821-122343,no_agoda_match,no candidate above name threshold,2026-08-21T14:41:12
+208,452272,1280,le-meridien-fairway-697,le meridien fairway,20260821-122343,no_agoda_match,rejected 'Le Méridien Towers Makkah' name=73% strict=50% dist=1639.32km same_city=False,2026-08-21T14:41:30
+209,452280,1280,al-nakheel-hotel-apartments-932,al nakheel hotel apartments,20260821-122343,no_rooms_any_date,"agoda source=http, bookme rooms=0",2026-08-21T14:45:37
+210,452285,1280,radisson-blu-hotel-dubai-media-city-535,radisson blu hotel dubai media city,20260821-122343,no_rooms_any_date,"agoda source=http, bookme rooms=0",2026-08-21T14:48:37

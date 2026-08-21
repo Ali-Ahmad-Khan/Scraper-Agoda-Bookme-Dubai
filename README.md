@@ -135,9 +135,18 @@ at all, in order of how much they actually buy:
 |---|---|
 | **the Agoda property cache survives a completed run** | **14.6 → 1.0 requests per hotel** on a re-run (measured live). Full Dubai: ~42,600 requests cold, ~2,900 warm |
 | **the browser fallback is metered** | a property page load is dozens of requests and used to bypass the pacer entirely — 89 unmetered page loads in the first prod run. Now charged 8 pacer slots before it navigates |
+| **requeue, never write off** | a hotel Agoda could not be *asked* about is retried at the end of discovery instead of being recorded as "no match". Recovered 96 rooms in one prod run |
 | **jitter** | every gap is `interval × U(1.0, 1.45)`. A uniform 1.5 s gap repeated 43,000 times is a metronome; variance removes that signature |
 | **session breaks** | ~60 s pause every 300 requests, so the run is not one continuous 17-hour stream |
-| **identity rotation** | fresh cookie jar *and* User-Agent per session — varied per session, never mid-session |
+| **identity rotation** | fresh cookie jar *and* User-Agent — on startup, after a block, and **proactively across every session break**. Jar and header always move together |
+
+Rotation is deliberately tied to the session break rather than to a "block
+threshold". Finding Agoda's real block point means getting blocked on purpose,
+repeatedly, on infrastructure we depend on — to locate an edge Agoda can move
+at will. The cadence we already run is evidence-backed from the other
+direction: 1,500 hotels over ~16 h at `SESSION_BREAK_EVERY = 300` with **zero**
+throttling events, so 300 requests is demonstrably inside Agoda's tolerance.
+Rotating there costs nothing — no extra request, no extra delay (D-68).
 
 Jitter and session breaks only ever **add** delay, so neither can make the
 client more aggressive than the floor allows.
@@ -158,7 +167,18 @@ request count, and the cache is the only lever that reduces it without asking
 Agoda fewer questions.
 
 Tune in `pipeline/agoda.py`: `JITTER`, `SESSION_BREAK_EVERY` (0 disables),
-`SESSION_BREAK_S`.
+`SESSION_BREAK_S`. Browser mode is `config.AGODA_BROWSER_PERSIST` — **default
+`False`** (fresh Chrome per hotel), because an A/B against live Agoda measured
+persistence as a wash on both recovery (19 rooms either way) and speed (136 s
+vs 138 s) — the ~4 s/hotel launch saving does not survive measurement, since a
+browser visit is billed the same 8 pacer slots regardless of mode (D-64).
+
+**Proven in production** (run `20260820-161210`, 100 Dubai hotels): Agoda
+blocked mid-run; the pipeline requeued the three affected hotels, raised its
+pace 1.5 s → 3.0 s, rotated identity, recovered inside one cooldown and eased
+back 3.0 → 2.0 → 1.5 s. All three requeued hotels succeeded on the retry,
+recovering 96 rooms the previous run would have written off. Against the
+run before it: **0 mapped → 86 of 100**, **221 MySQL deferrals → 0**.
 
 ### If Agoda stops answering — working through, not waiting it out
 
@@ -405,6 +425,47 @@ back from its checkpoint.
   next run of its city, unless it's flagged `needs_image_backfill` (above).
 
 ## Reports
+
+### Reading the headline number honestly
+
+A run that reports *532/1500 (35%)* is not a matcher scoring 35%. Measured on
+run `20260820-061304` (D-70/D-71): **the entire 968-hotel shortfall is
+`v2_common_hotels` rows that Bookme does not sell.** Probed across seven date
+shapes, 0% of them return a single sellable room — against a 26.7% baseline
+for the catalogue at large. There is nothing to map.
+
+The summary says so directly:
+
+```
+  not mapped                   968/1500
+    ├─ no agoda listing; bookme had 0 rooms 801   -- booking never asked
+    ├─ agoda listed it; 0 rooms on agoda AND bookme 167
+    └─ error                   0
+  (info) bookme itself returned 0 rooms 968/1500 (65%)  -- BOTH rows above
+  (info) bookme never answered 0/1500  -- unanswered, NOT 'zero rooms'
+```
+
+**Both** failure rows are zero-Bookme-rooms conditions — the 801 via the
+no-agoda-match `not bm_rooms` continue, the 167 via `not ag_rooms and not
+bm_rooms`. They differ only in whether Agoda could identify the property, so
+the inventory fact is reported once, across both, rather than under either.
+
+Every row names the sources it actually queried, because the three are
+consulted in a **different combination on each branch** — row 1 asked Agoda
+alone, row 2 asked Agoda and Bookme, and neither reached Booking (it only
+fills rooms Bookme already sells, so with zero Bookme rooms there is no gap
+for it to fill). "Either platform" would be unreadable here.
+
+The last line answers a different question and is easy to misread: it counts
+hotels the harvest never got an *answer* for, not hotels that answered "no
+rooms". Those are in the line above it.
+
+`--limit N` is a fixed window of the catalogue, so the dead rows are
+reproducible: the same N always covers the same hotels.
+
+There is deliberately **no "coverage of mappable stock" percentage**. Every
+hotel with something to map does get mapped, so that ratio is 100% by
+construction — a tautology, not a metric.
 
 Two kinds of output, kept deliberately separate: a **per-run report** (this
 run, this folder, never touched again) and a **cross-run ledger** (persists,

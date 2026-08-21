@@ -60,9 +60,27 @@ def main(apply_it):
         conn.close()
         return
 
-    with conn.cursor() as cur:
-        cur.execute(DDL)
-    conn.commit()
+    try:
+        with conn.cursor() as cur:
+            cur.execute(DDL)
+        conn.commit()
+    except Exception as e:
+        # 1142 = command denied. The pipeline's own account is deliberately
+        # least-privilege (SELECT, INSERT, UPDATE, CREATE, INDEX, EXECUTE --
+        # no ALTER, no DELETE, no DROP), which is the correct posture for it.
+        # DDL is therefore a DBA action, not something this pipeline should be
+        # able to do. Report the exact statement rather than failing obscurely.
+        if getattr(e, "args", [None])[0] == 1142:
+            print("\nALTER is DENIED for this account -- by design.")
+            print("  grants: SELECT, INSERT, UPDATE, CREATE, INDEX, EXECUTE")
+            print("\nHand this to whoever holds DDL rights on "
+                  f"{dbname}:\n\n    {DDL};\n")
+            print("Until then the pipeline runs fine without the column: "
+                  "db.room_columns() detects its absence and simply omits "
+                  "size from every statement (D-53). Nothing else is affected.")
+            conn.close()
+            return
+        raise
 
     with conn.cursor() as cur:
         cur.execute(f"SHOW COLUMNS FROM {TABLE}")

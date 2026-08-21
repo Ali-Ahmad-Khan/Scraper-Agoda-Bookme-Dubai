@@ -103,26 +103,28 @@ TRUST_PERMANENT_UNAVAILABLE = True
 
 # --- agoda browser fallback --------------------------------------------------
 # True  = ONE Chrome for the whole run, reused between hotels.
-# False = a fresh Chrome per hotel (the behaviour before 2026-08-20).
+# False = a fresh Chrome per hotel.
 #
-# THIS IS AN OPEN QUESTION, NOT A SETTLED ONE. Both directions are plausible
-# and NEITHER has been measured against Agoda's blocking behaviour:
-#   * persistent  -- one continuous session looks like a person browsing; 89
-#     brand-new browsers with empty profiles do not. But a long-lived session
-#     also accumulates whatever per-session state Agoda counts against us.
-#   * per-hotel   -- every hotel starts from a clean profile with no history,
-#     which may be exactly what resets a per-session counter.
+# MEASURED (D-64), not argued: an A/B against live Agoda, same 6 properties
+# both arms, ABBA-ordered so a block building over time could not be blamed on
+# whichever arm ran second.
 #
-# What IS measured: the per-hotel mode was in place for the first production
-# run, where the browser fallback recovered rooms for only 8 of 89 properties
-# (9%), and that run was blocked anyway. So per-hotel launching is not a proven
-# defence -- it is simply what happened to be there.
+#     rooms recovered   persistent 19   per-hotel 19   -- identical
+#     wall clock        persistent 136s  per-hotel 138s -- no saving either
 #
-# Persistent is the default because it is the only one with any evidence behind
-# it (it is ~4s/hotel faster and it is what this module's own docstring always
-# claimed to do). Flip this to False to A/B it; the honest way to settle it is
-# two comparable runs, spaced apart, on the same hotel set.
-AGODA_BROWSER_PERSIST = True
+# The speed argument for persistent (~4s/hotel launch saved) does not survive
+# measurement: a browser visit is billed 8 pacer slots (~15s) in BOTH modes, so
+# the launch cost is swallowed by pacing both arms pay regardless. Default is
+# False because a change with no demonstrated benefit should not carry
+# persistence's extra failure surface (a wedged browser poisoning later
+# fallbacks, memory growth over a 2,916-hotel run).
+#
+# This A/B ran under HEALTHY conditions and cannot answer "which gets blocked
+# SOONER under sustained load" -- that needs a long soak test, deliberately
+# pushed until it breaks, which is not something to do casually against
+# infrastructure this project depends on. Flip to True and re-test if that
+# question ever needs settling.
+AGODA_BROWSER_PERSIST = False
 
 # --- booking.com gap-fill ----------------------------------------------------
 # Booking is a SECOND source, used only where Agoda left a Bookme room with no

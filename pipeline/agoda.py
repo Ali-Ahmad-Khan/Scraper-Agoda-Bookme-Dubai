@@ -62,6 +62,37 @@ def session():
     return s
 
 
+def refresh_identity(s):
+    """Give an EXISTING session a new identity, in place.
+
+    Proactive rotation, called by _get_json across the SESSION_BREAK idle gap
+    -- so a long run presents as a series of ordinary browsing sessions rather
+    than one 17-hour marathon on a single cookie jar. Cheap by construction: it
+    issues no requests and adds no delay, so unlike every other prevention
+    measure here it costs nothing to run.
+
+    Deliberately NOT a threshold discovered by provoking Agoda. Finding the
+    real block point means deliberately getting blocked on production
+    infrastructure we depend on, repeatedly, to locate an edge that Agoda can
+    move at any time. The cadence we already have is evidence-backed from the
+    other direction: run 20260820-061304 completed 1,500 hotels and ~16 hours
+    with SESSION_BREAK_EVERY=300 and was never throttled once, so 300 requests
+    is a cadence already demonstrated to sit inside Agoda's tolerance. Rotating
+    on a boundary we know is safe beats guessing at one we would have to break
+    things to learn.
+
+    Jar AND header together, never one without the other -- see UA_POOL. A new
+    User-Agent on an established cookie jar is a browser that changed identity
+    mid-session, which is a STRONGER automation signal than never rotating at
+    all. Clearing the jar is what makes the new header coherent.
+    """
+    global _session_seq
+    s.cookies.clear()
+    s.headers["User-Agent"] = UA_POOL[_session_seq % len(UA_POOL)]
+    _session_seq += 1
+    return s
+
+
 class Throttled(Exception):
     """Agoda answered, but not with data."""
 
@@ -172,6 +203,8 @@ def _pace(cost=1):
     if SESSION_BREAK_EVERY and _since_break >= SESSION_BREAK_EVERY:
         _since_break = 0
         time.sleep(SESSION_BREAK_S * random.uniform(0.8, 1.2))
+        return True          # caller rotates identity across the gap
+    return False
 
 
 def _note(ok, log=None):
@@ -226,7 +259,8 @@ def _get_json(s, url, params=None, timeout=60, tries=5, base_delay=3):
     """
     last = None
     for i in range(tries):
-        _pace()
+        if _pace():
+            refresh_identity(s)
         try:
             r = s.get(url, params=params, timeout=timeout)
             if r.status_code == 200 and "json" in (r.headers.get("content-type") or ""):

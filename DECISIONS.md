@@ -1216,6 +1216,117 @@ blocked.
 *Override if:* a long run shows browser memory growth — recycle the page every
 N visits rather than returning to per-hotel launches.
 
+**D-61 — PRODUCTION PROOF, run `20260820-161210`: the throttle was engineered
+through, live, exactly as designed.**
+100 Dubai hotels on prod, `--plan-only`. Agoda blocked mid-run and the pipeline
+worked through it without losing a single hotel. The sequence, from the log:
+
+```
+[68/100] pearl residence ...   agoda unreachable (HTTP 502) -- requeued
+[69/101] arabian park ...      agoda unreachable (HTTP 502) -- requeued
+  agoda throttled 6x in a row -- cooldown #1: sustained pace 1.5s -> 3.0s
+[70/102] metropolitan ...      agoda unreachable (HTTP 502) -- requeued
+  !! AGODA UNREACHABLE for 3 hotels in a row. Rotated session identity;
+     sustained pace now 3.0s. These hotels are requeued, not written off
+  agoda steady for 40 calls -- easing pace to 2.0s
+  agoda steady for 40 calls -- easing pace to 1.5s
+[101/103] pearl residence ...  -> booking takes over for 4 room(s)
+[102/103] arabian park ...     -> mapped 49 rooms (48 with candidate photo)
+[103/103] metropolitan ...     -> mapped 47 rooms (39 with candidate photo)
+```
+
+Every element of D-54 fired in order and each did its job: **requeue** (no
+unearned zero), **raise the rate before sleeping**, **rotate identity at 3**,
+then **ease back only after 40 clean calls** — twice, 3.0 → 2.0 → 1.5 s. Full
+recovery inside one cooldown, against six consecutive failed cooldowns and
+3.75 hours of dead sleep in the previous run.
+
+**The requeue alone saved 96 rooms.** `arabian park` (49) and `metropolitan`
+(47) both succeeded on the retry; under the old code both would have been filed
+as `no_agoda_match` and lost.
+
+| | 20260819 (before) | 20260820 (after) |
+|---|---|---|
+| hotels mapped | **0** of 821 | **86** of 100 |
+| rooms with a photo | 0 | **2,528 of 2,965 (85%)** |
+| MySQL drops / deferrals | 221 / 221 | **0 / 0** |
+| errors | 0 (nothing got far enough) | **0** |
+| booking rescues | 0 | **677 rooms across 29 hotels** |
+| existing-room queries | 2,916 | **1** |
+| throttle outcome | 6 cooldowns, never recovered | **1 cooldown, fully recovered** |
+| duration | 15.9 h → nothing | 110.6 min for 103 |
+
+⚠️ Still unmeasured after this run: **the browser fallback recovers almost
+nothing in either mode** — 3 of 26 here (11.5%) against 8 of 89 (9%) in the
+previous run. The module exists on the premise that a browser rescues roughly a
+third of properties. Two runs now say ~10%. That premise needs re-testing on
+its own; see O-5.
+
+**D-62 — `size_sqft` cannot be added by the pipeline's own account, and that is
+correct.**
+`GRANT SELECT, INSERT, UPDATE, CREATE, INDEX, EXECUTE ON bookme_sky_prod.*` —
+**no ALTER, no DELETE, no DROP.** The migration fails with 1142 by design, so
+prod is structurally incapable of losing data to this pipeline regardless of any
+application-level guard.
+`add_size_sqft_column.py` detects 1142 and prints the statement for whoever
+holds DDL rights instead of failing obscurely:
+
+```sql
+ALTER TABLE v2_rooms ADD COLUMN size_sqft INT NULL, ALGORITHM=INSTANT;
+```
+
+Appended at the end (not `AFTER thumbnail`, which can force a full table
+rebuild) with `ALGORITHM=INSTANT` stated so the server refuses loudly rather
+than silently taking a lock. Until a DBA runs it, `db.room_columns()` omits
+size from every statement and everything else publishes normally (D-53).
+
+**D-63 — A deterministic hook makes DELETE impossible from this session.**
+`.claude/no-destructive-sql.sh`, wired as a `PreToolUse` hook on Bash in
+`.claude/settings.json`. Blocks `DELETE FROM`, `DROP TABLE/DATABASE/COLUMN`,
+`TRUNCATE`, and any invocation of `cleanup_for_fresh_run.py` (which genuinely
+deletes rows and was written for UAT). Permits `ALTER TABLE … ADD COLUMN` only.
+Exit code 2 means the command never executes — this is not guidance a model can
+reason past. Verified live by tripping it.
+Three independent layers now stand between this project and data loss: the
+MySQL grants (no DELETE/DROP at all), `db.py::_sql()`'s additive-only guard,
+and this hook.
+
+**D-64 — MEASURED: persistent vs per-hotel browser is a wash. My stated
+justification for the change does not survive the measurement.**
+A/B against live Agoda, 6 resolved properties, same set both arms, **ABBA
+ordering** so a block building over time could not be blamed on whichever arm
+ran second:
+
+| | persistent | per-hotel |
+|---|---|---|
+| rooms recovered | **19** | **19** |
+| properties at zero | 3/6 | 3/6 |
+| wall clock | 136 s | 138 s |
+
+Identical recovery, and — the part that undercuts my own argument — **no
+meaningful speed difference either.** I justified the change partly on saving
+~4 s per hotel; that saving is swallowed by the pacer charge, since a browser
+visit is billed 8 slots (~15 s) in *both* modes. The launch cost is hidden
+inside pacing that both arms pay.
+
+So of the two claims made about this change, one is now falsified (speed) and
+the other remains unmeasured (block resistance). **This A/B measures behaviour
+under HEALTHY conditions — it cannot answer "which gets blocked sooner under
+sustained load", which is the question that actually matters.** Settling that
+needs a long soak test deliberately pushed until it breaks, which is not
+something to do casually against infrastructure this project depends on.
+
+**Recommendation on the evidence: default `AGODA_BROWSER_PERSIST = False`** —
+back to per-hotel. Not because per-hotel is proven better, but because a change
+with no demonstrated benefit should not carry the extra failure surface
+persistence adds (a wedged browser poisoning later fallbacks, memory growth
+over a 2,916-hotel run). The persistent path stays behind the flag, working and
+selftested, for whoever runs the soak test.
+*Override if:* a soak test shows one mode survives materially longer.
+
+**Flipped 2026-08-20, on operator instruction, after the measurement above.**
+`config.AGODA_BROWSER_PERSIST = False` is now the live default.
+
 ## Open / unsettled
 
 - **O-1 — Is `/hotels/api/availability` a supported contract?** Undocumented,
@@ -1228,3 +1339,634 @@ N visits rather than returning to per-hotel launches.
 - **O-4 — No unique constraint on `v2_rooms(v2_common_hotel_id, name)`**, so
   duplicate protection is a check-then-act across processes. Adding it requires
   schema approval.
+- **O-5 — RE-MEASURED, and the picture got worse, not better. Recommend
+  disabling the browser fallback; not yet done.**
+  Third measurement, live: for 8 HTTP-empty Dubai properties, ran (a) the
+  browser alone, (b) the 10-rung escalation ladder alone, (c) the ladder
+  unioned with whatever the browser found — because `agoda_rooms()` always
+  runs the ladder regardless of browser outcome, so the question that matters
+  is MARGINAL value, not raw rescue rate.
+
+  **The browser recovered 0 rooms in all 8 properties — 0/8, not a partial
+  rescue.** The test's own auto-verdict claimed "+2 marginal rooms" at Shangri-La,
+  but that is a **measurement artifact, not a browser contribution**: the browser
+  column for that row is also 0, so the 15-vs-17 gap is two independent live
+  calls to the same 10-rung ladder, seconds apart, returning different counts —
+  real-time inventory movement, not anything the browser found. Correcting for
+  that: **true marginal contribution across this batch was 0 rooms**, at a cost
+  of 192 s (24 s/property).
+
+  Now three independent measurements, all pointing the same direction against
+  the module's original "roughly a third" premise:
+
+  | measurement | rescue rate |
+  |---|---|
+  | prod run 1, fresh browser/hotel | 8/89 = 9% |
+  | prod run 2, persistent browser | 3/26 = 11.5% |
+  | marginal-over-ladder, live | **0/8 = 0%** (raw rescue was also 0/8) |
+
+  **Not disabled yet** — this is a recommendation, not an action taken, because
+  it removes a whole rescue path and the sample sizes (89, 26, 8) are not huge.
+  If confirmed on a larger batch, the honest move is to retire
+  `agoda_browser.py` for cost (24 s/property, an extra full Chrome page load =
+  more detection surface) with near-zero demonstrated benefit. Operator
+  decision.
+
+---
+
+**D-65 — The isNHA veto was rejecting rentals that ARE the Bookme row, not just
+rentals that name-drop a hotel. 430 of 875 `no_agoda_match` hotels died on that
+one line; 127 of them had a candidate whose name was the Bookme name.**
+
+Run `20260820-061304` (1,500 Dubai hotels, 532 mapped = 35%) reported 875
+`no_agoda_match`. Bucketed by cause, that number is not one failure:
+
+| cause | hotels | verdict |
+|---|---|---|
+| isNHA veto | 430 | **partly wrong — fixed here** |
+| no candidate above name threshold | 282 | genuine, see D-66 |
+| scored rejection (distance/city/strict) | 154 | mostly correct |
+| Agoda returned no suggestion at all | 9 | genuine |
+
+`match_hotel`'s isNHA veto exists for a real case (D-?/`run.py` docstring): a
+vacation rental whose title embeds a hotel's name — "Luxury Burj View 2BR in
+Kempinski Central Avenue" — sits in the same building as the Kempinski, scores
+100% on name, and is not the hotel. Neither name nor distance can rule it out,
+so the flag had to.
+
+What the veto missed is that **Dubai's Bookme catalogue is itself full of
+vacation rentals.** For those rows the correct Agoda counterpart IS an isNHA
+listing, and the blanket veto made them permanently unmatchable. The operator
+caught this from two examples; the data says it is 430.
+
+- `nasma luxury stays central park tower` → rejected `Nasma Luxury Stays - Central Park Tower`
+- `nasma luxury stays limestone house` → rejected `Nasma Luxury Stays - Limestone House`
+- `kennedy towers cayan tower` → rejected `Kennedy Towers - Cayan Tower [Dubai]`
+
+**The separator is `strict_score`, and it is clean.** `token_set_ratio` scores
+BOTH the name-dropping case and the same-listing case at 100 and cannot tell
+them apart. `token_sort_ratio` is length-sensitive and does — measured over all
+430:
+
+| population | strict_score |
+|---|---|
+| name-drops a hotel (the case the veto is for) | **≤ 59** |
+| genuine same-listing pair | **90–100** |
+
+102 of the 430 scored a flat 100 — verbatim-identical names. The gap between 59
+and 90 is wide enough that the threshold choice is not delicate.
+
+**A high score alone is NOT sufficient, and this is the part that would have
+shipped a precision regression.** Same-operator siblings differ by exactly one
+token — a unit number:
+
+- `frank porter rimal 3` vs `Frank Porter - Rimal 1` → strict **95.0**
+- `frank porter goldcrest views` vs `Frank Porter - Goldcrest Views 2` → **96.6**
+- `frank porter fairmont residences` vs `Frank Porter - Fairmont Residence South` → **92.8**
+
+All three would have passed a pure score gate and published the wrong
+apartment's photos. So numerals and compass words are vetoed on disagreement
+rather than scored — the same treatment `CLASSES` already gives room class,
+for the same reason. `match.unit_marks` / `match.same_listing`.
+
+The destination is dropped before scoring: Agoda appends "[Dubai]" where Bookme
+does not, and since the whole comparison is already city-scoped that token is
+pure length noise. It moved three `Kennedy Towers - X [Dubai]` listings from
+88–90 to a flat 100 and cost nothing (127 rescued vs 124, zero lost).
+
+**Measured effect on matching:** 430 isNHA rejections → **127 rescued** (30%).
+`hotels_no_agoda_match` 875 → 748.
+
+**Verified live, and the match quality is not in doubt.** Sampled 12 of the 127
+end-to-end against Agoda: **12/12 matched, every one at `conf=high`, coordinates
+1–64 m apart.** Two of them are the unit-mark veto working as designed —
+`frank porter beach vista tower 2` matched `...Beach Vista Tower 2` at 6 m and
+`frank porter - reehan 5` matched `...Reehan 5` at 64 m, while the same rule
+blocks `Tower 1` against `Tower 2` and `Rimal 3` against `Rimal 1`.
+
+**But do NOT read 127 as +127 published hotels, and an earlier draft of this
+entry did exactly that.** Two measurements cut it down:
+
+- **97% of the unmatched hotels have no Bookme rooms either.** Of 614
+  `no_agoda_match` lines in the run log, 597 read "no agoda match, **no bookme
+  rooms either**". For those, a match only pays if Agoda supplies inventory to
+  CREATE rooms from — there is nothing on the Bookme side to attach photos to.
+- **Most of these rentals have no Agoda inventory.** In the live sample, 10 of
+  12 returned `supplier_count=0` — Agoda affirmatively reporting that no
+  supplier offers the property. Only **2 of 12 (17%)** yielded rooms, 4 in total.
+
+So the honest projection is **~17–25% of 127 ≈ 20–30 hotels** gaining
+publishable rooms, i.e. `hotels_mapped` 532 → **roughly 550–560 of 1,500
+(35% → ~37%)**, not the 659/44% that the match count alone suggests.
+
+The other ~100 are still worth rescuing, just for less: they are reclassified
+from "absent from Agoda" (a permanent-looking, wrong fact) to "on Agoda, no
+inventory" (`hotels_no_rooms`, revisitable when inventory returns), they enter
+the property cache so future runs cost 1 request instead of 14.6, and a
+matched hotel is eligible for Booking.com gap-fill where a written-off one is
+not.
+
+---
+
+**D-66 — The 282 "no candidate above name threshold" hotels are largely a
+genuine dead end, and lowering the threshold would be a precision disaster.
+Measured, and the measurement says DON'T.**
+
+The tempting read of 282 hotels is "our floor is too high." Tested live against
+Agoda's suggest endpoint on a 40-hotel random sample of that exact bucket:
+
+- For real, well-known hotels — `jumeirah creekside dubai`, `dusitd2 kenz hotel
+  dubai` — Agoda's suggest index returns **zero candidates**, under the plain
+  name, the name + destination, AND the address query. Not a threshold problem.
+  The property is not reachable through that index.
+- Where a sub-threshold Dubai candidate DOES exist, it is almost always a
+  different property in the same building. Of 16 such candidates, ~2 were
+  correct:
+  - `key view dec tower 2` → `Frank Porter - Dec Towers 1` ✗
+  - `ac pearl holiday marina skyline view` → `Rove Dubai Marina` ✗
+  - `the dubai holiday home, spacious 2 bed` → `The Dubai EDITION` ✗
+  - `time opal hotel apartments` → `TIME Oak Hotel & Suites` ✗ (different TIME hotel)
+  - `suha creek hotel apartment` → `SUHA Creek, Waterfront Al Jaddaf` ✓ (rebrand)
+
+**Lowering `NAME_OK` from 72 would admit ~87% garbage**, so it stays at 72.
+
+Distance does not rescue the good ones either, and this is worth recording
+because it is the obvious next idea: `_confidence` could admit a sub-72 name
+when coordinates prove the building. It cannot — Dubai Marina packs dozens of
+towers inside `NEAR_KM`, and the run's own data shows `sea view 2bd in new
+52|42 tower` sitting 0.36 km from `Rove Dubai Marina`. Same 350 m, different
+buildings.
+
+Honest conclusion: this bucket is Agoda's index coverage, not our tuning. It is
+the part of the 875 that is genuinely **not in our hands**.
+
+---
+
+**D-67 — `--limit N` now means a fixed window of the catalogue, so runs are
+reproducible. It previously meant "N hotels not already done", which slid.**
+
+Operator-reported, and correct. `db.hotels()` filtered `skip_ids` BEFORE
+counting toward the limit, so `--limit 1500` meant "walk the catalogue until
+1,500 hotels that aren't in the ledger have been collected." As the ledger
+fills, the window slides further down the catalogue on every re-run: no two
+runs cover the same hotels, and no result can be reproduced or backtracked to
+the run that produced it.
+
+Now the limit slices the ordered rows first and `skip_ids` subtracts within
+that window. `--limit 1500` is always the same 1,500 hotels; a run that skips
+200 fresh ones processes 1,300, and those 1,300 are a subset of the same fixed
+1,500. Costs nothing — it did not bite this run (`hotels_in_ledger_globally: 15`,
+`hotels_skipped_fresh: 0`) but would have on every subsequent one.
+
+---
+
+**D-68 — Proactive identity rotation, on the session break we already have —
+NOT on a block threshold discovered by provoking Agoda.**
+
+The operator asked for rotation at a fixed threshold rather than only on a 502,
+and asked that the threshold be measured rather than assumed. Two findings:
+
+**Finding 1 — the pacer already had the boundary, and was wasting it.** Every
+`SESSION_BREAK_EVERY = 300` requests `_pace()` sleeps 60 s, then carries on
+with *the same cookie jar and the same User-Agent*. A 16-hour run therefore
+presented as one continuous session with suspicious 60-second gaps in it.
+Rotating identity across that gap is free: no extra requests, no extra time.
+
+**Finding 2 — the threshold cannot honestly be measured, and does not need to
+be.** Locating "the point where Agoda blocks" means deliberately getting
+blocked on production infrastructure this pipeline depends on, repeatedly, to
+find an edge Agoda can move whenever it likes. That is a bad trade and it is
+not the only evidence available. Run `20260820-061304` completed **1,500 hotels
+over ~16.2 hours with zero throttling events** — no cooldowns, no rotations, no
+requeues anywhere in the log — at `SESSION_BREAK_EVERY = 300`. So 300 requests
+is already *demonstrated* to sit inside Agoda's tolerance. Rotating on a
+cadence we know is safe beats guessing at one we would have to break things to
+learn.
+
+Jar and header move **together**, never one without the other. `UA_POOL`'s own
+note is the reason: a new User-Agent on an established cookie jar is a browser
+that changed identity mid-session, which is a *stronger* automation signal than
+never rotating at all. Clearing the jar is what makes the new header coherent.
+
+---
+
+**D-69 — "Accessible" means two unrelated things, and the room matcher was
+reading both as disability. Resolved by grammar, not by a list of facilities.**
+
+31% of the run's review file (58 of 188 rows) turned on accessibility
+vocabulary, every one of them pinned at exactly 74.0 — which is not a score at
+all but `ROOM_ACCEPT_CEILING`, the deliberate safety cap from the ACCESSIBILITY
+rationale. Two of the three causes were outright bugs:
+
+**(a) Entitlement misread as disability (15 rows).** "1 King Premium Club
+Lounge **Accessible**" is a club-lounge perk. It was being compared against
+Bookme's "1 King Bed Premium Room Club **Access**" — the identical perk — and
+scored as an accessibility *disagreement*.
+
+**(b) Disability vocabulary the veto did not know.** "Superior **Special
+Needs** Room" vs "Superior **Accessible** Single Room" are both accessible
+rooms. Worse, `PROMO_NOISE` strips "special" as advertising language, so by the
+time `features()` looked, the surviving token was a bare "needs" and the
+accessibility signal was **gone entirely**.
+
+**The first attempt at (a) was wrong and was rejected in review.** It special-cased
+`club|lounge` — patching the instance that surfaced. Hospitality grants access
+to an open class of things: beach, pool, spa, gym, terrace, garden, rooftop,
+marina, ski, shuttle. The production data already contained `beach access`. A
+list is wrong the moment a property invents an amenity.
+
+Read off the grammar instead — the same argument `view_of()` already makes for
+view subjects:
+
+- **"access" is a noun** and takes a subject: `<something> access` is access TO
+  that something, whatever it is. No list, no ceiling. The disability reading is
+  written `<disability word> access` and is caught before this.
+- **"accessible" is an adjective.** Default: disability. Entitlement only when
+  preceded by `PERK_NOISE` — the module's *existing* service-entitlement
+  vocabulary ("Club **Lounge** Accessible").
+
+**Ambiguity resolves toward disability, deliberately.** An intermediate version
+read "any unrecognised preceding word" as a facility subject, which the existing
+suite caught immediately: "**Cosy** Accessible Room" became an entitlement,
+silently losing a real disability marker, because "cosy" is one of an open class
+of adjectives. The asymmetry is the whole point — a wrong "accessible" costs one
+pair held in the review band where a human still sees it; a wrong entitlement
+auto-publishes a standard bathroom to the guest who most needs a roll-in shower.
+
+**Effect:** 14 review rows freed from the ceiling to score on merit. Verified
+against 35 phrasings, including facilities the code never names.
+
+**(c) NOT changed: the 45 genuinely one-sided rows.** The operator's reading is
+that "accessible" is an amenity that does not change how the room looks, so
+`Superior Room (Accessible)` should take `Superior Double Room`'s photos. That
+is a product call and it is theirs to make, but the cap is not costing them the
+match: a capped pair lands in `rooms_review.csv` **with the candidate image and
+a `decision` column**, and `apply_review_decisions()` publishes whatever a human
+approves. The recovery path already exists and needs no code change. Removing
+the cap instead would auto-publish standard-bathroom photos onto accessible
+rooms across every future city, unreviewed. Recommend keeping it and approving
+the 45 in the review file. Operator decision.
+
+---
+
+**O-5 UPDATE — the browser fallback is NOT dead weight after all. Correcting my
+own recommendation.**
+
+The entry above recommended retiring `agoda_browser.py` on 0/8 marginal value.
+Run `20260820-061304`'s log refutes the strong form of that: over the ~727
+hotels the captured log covers, the browser was the room source for **2 hotels**
+— `al jazeera hotel apartments llc` (1 room) and `premier inn dubai dragon mart`
+(6 rooms → 12 mapped). Small, but not zero, and my 8-property sample was simply
+too small to see a ~0.3% event.
+
+Retirement is **off the table** on current evidence. The measured cost
+(24 s/property, one extra Chrome page load of detection surface) is real, so the
+open question narrows to whether the fallback should be *gated* — tried only for
+properties whose HTTP grid is empty AND whose `supplier_count > 0`, which is
+Agoda's own signal that an empty grid is anomalous rather than truthful. That
+gate is not built. Still an open question, no longer a retirement recommendation.
+
+---
+
+**D-70 — MEASURED: the rentals we "lose" to the isNHA veto have no Bookme
+inventory to lose. The veto is not the bottleneck it looks like.**
+
+The operator's read of run `20260820-061304` was that Dubai's catalogue is full
+of rental listings and the isNHA veto is throwing them away. D-65 already
+rescued 127 of the 430 rejections (names that ARE the Bookme row). The question
+was what to do about the remaining 303.
+
+Before tuning the threshold, I asked what those 303 rows actually are. Probing
+the Bookme availability API directly:
+
+| population | n sampled | have ANY sellable rooms |
+|---|---|---|
+| whole Dubai catalogue (baseline) | 30 | 26.7% |
+| isNHA rejections — low band (<60) | 40 | **0%** |
+| isNHA rejections — mid band (60–90) | 40 | **0%** |
+| isNHA rejections — high band (D-65 rescued) | 40 | 7.5% |
+| `no_agoda_match` (all reasons) | 30 | **0%** |
+| `no_rooms_any_date` | 30 | **0%** |
+
+**Controlled twice, because a 0% result is exactly the shape a broken probe
+makes.** Hotels known to have produced rooms in the run returned 3–38 rooms on
+the same single-shape call (11/12 nonzero), so the probe works. And 12
+NHA-rejected slugs re-probed across **7 date shapes** (the pipeline's own
+spread: 1–12 weeks out, 1–2 adults, 1–3 nights) returned 0 rooms on every
+shape — so this is not a seasonal or single-date artifact.
+
+**These are dead catalogue rows** — `v2_common_hotels` entries Bookme does not
+sell. Accepting their Agoda rental match would create room records (Agoda
+leftovers DO publish as new rooms, `map_rooms` final loop) for properties with
+no sellable inventory.
+
+**Three candidate discriminators tested and all falsified:**
+- `v2_hotels.hotel_type_id` / `hotel_category_id` — the columns exist, and are
+  **100% NULL** across all 3135 Dubai rows. Bookme does not classify these.
+- Agoda's own `accommodation_type` — "Apartment/Flat" dominates *every* band
+  (122/154/105). No separation.
+- Bookme room-set corroboration — unavailable: the population has no rooms.
+
+**Not changed, and why.** The mid band is genuinely ~50/50 by inspection —
+`driven holiday homes - 29 boulevard` → `Driven Holiday Homes Apartment in 29
+Boulevard` is the same listing; `frank porter - ag tower` → `Frank Porter -
+Sparkle Tower 1` is a different building from the same operator. No available
+signal separates them, so auto-accepting would attach rental photos to the
+wrong building about half the time. The threshold stays at 90.
+
+**What DID change:** the rejection reason now carries the Agoda property id and
+URL, so the 303 are adjudicable by a human instead of having to be re-derived.
+
+**The open product question, which is the operator's and not the pipeline's:**
+should Bookme hold room records for properties it does not sell? If yes, the
+mid band becomes worth a supervised pass. If no, these 303 are correctly
+dropped and the isNHA veto is doing its job.
+
+---
+
+**D-71 — "no listing on any platform" was reporting a catalogue fact as a
+matching failure.**
+
+Run `20260820-061304` read as *532/1500 published (35%)*, with 801 hotels under
+"no listing on any platform". That framing invites the question the operator
+asked: *is it really that 800 hotels had no counterpart?*
+
+The 801 are precisely the hotels that took the `if not bm_rooms: continue`
+branch — **no Agoda match AND no Bookme rooms**. That is not one fact, it is
+two, and they have different remedies: "Agoda has no listing" is a matching
+outcome a better matcher could improve; "Bookme sells no rooms here" is a
+property of our own catalogue that no matcher can touch.
+
+Added `hotels_no_bookme_rooms`, counted at that branch and reported as a
+sub-row. Replaying run 2's own numbers through the new summary:
+
+```
+  not published                968/1500
+    ├─ no listing on any platform 801
+    │   └─ and no bookme rooms either 801      <- 100% overlap
+    ├─ listed but zero rooms   167
+```
+
+**The entire shortfall is properties with nothing to map.** Deliberately NOT
+expressed as a "coverage of mappable stock" percentage: every hotel with
+something to map does get mapped, so that ratio is 100% by construction — a
+tautology dressed as a metric. The raw count is the honest form.
+
+---
+
+**D-72 — MEASURED: Booking cannot cover the hotels Agoda misses. The obvious
+fallback has no yield.**
+
+Two separate reasons, one by design and one by measurement.
+
+**By design:** Booking is gap-fill-only — it fills rooms Bookme already sells
+and never adds new ones. `_booking_fill`'s docstring already carries the
+reasoning: a Booking listing may legitimately be *one apartment inside the
+building*, so its room set is not the hotel's. *"Filling a room Bookme already
+sells cannot introduce a room that does not exist; adding one can."* That is
+why the `not bm_rooms` branch skips Booking rather than an oversight.
+
+**By measurement:** it would not have helped anyway. `resolve_verified` against
+live Booking.com:
+
+| population | resolved |
+|---|---|
+| hotels the run processed normally (control) | **4/8** |
+| hotels Agoda could not match | **0/10** |
+
+**This result required two attempts and the first was wrong.** My initial run
+passed `"ae"` as the `city` argument and returned 0/14 — which looked like a
+clean finding until the control *also* returned 0/12, including Shangri-La and
+Jumeirah Emirates Towers, which are certainly on Booking. The zero was my bug,
+not Booking's. Re-run with `city="Dubai"` the control resolves and the test
+still does not.
+
+Individually-listed Dubai rentals are not findable on Booking under the Bookme
+row's name at ≤250 m. Building an agoda-blind Booking path would add a whole
+source-of-truth branch for approximately zero hotels. **Not built.**
+
+**A flag I raised and then withdrew.** The control produced `swissotel al
+murooj` → `roda-al-murooj-hotel`, which I recorded as a plausible
+cross-property match. It is not. Scored offline: `swissotel al murooj` vs
+`roda al murooj` is **78.3**, well under the `BOOKING_MIN_NAME = 90` gate, so
+it could not have passed on that name. The gate scores the candidate's
+**TITLE, not its slug** — so Booking's title must itself read "Swissotel Al
+Murooj", and the slug is simply stale from a rebrand. That is the same
+phenomenon `resolve_verified`'s own docstring already records (`hilton dubai
+the walk` → `hilton-dubai-jumeirah-residence`, "the SAME hotel under an old
+slug"). **No defect, and `BOOKING_MIN_NAME` needs no change on this evidence.**
+Recorded because a withdrawn flag is worth as much as a raised one — the next
+reader would otherwise re-open it.
+
+---
+
+**D-73 — Generic room images: nothing to fix, and "fixing" it would be a
+regression.**
+
+The operator observed rooms occasionally receiving generic-looking images and
+asked whether property-level photos should be used where room-level ones are
+missing. **Both sources are already room-level by construction:**
+
+- Booking's page carries `allRoomPhotos` (each with `associated_rooms`) and
+  `hotelPhotos` **separately**. This module reads only the first. Hotel-level
+  photos are structurally excluded — that binding is the entire reason Booking
+  is in this pipeline.
+- Agoda's images come from the `masterRoom` grid, where each entry carries its
+  own image list. Scraping the DOM instead bleeds images between rooms, which
+  is why it is not done that way.
+
+So a generic-looking photo is the *property's own* room photo — a hotel that
+uses one stock shot across several room types. Adding a property-level fallback
+would put lobby and pool photos on rooms, unreviewed, across every future city.
+The correct behaviour for a room with no room-level photo is the current one:
+publish it without an image and report it (`rooms_without_candidate_images`).
+**No change. Handling this would trade a known-correct 80% for a
+plausible-looking 100%.**
+
+---
+
+**O-6 (OPEN, proposal only — nothing built) — Proxy rotation and concurrency:
+where the time actually goes, and what it would cost to buy it back.**
+
+Asked by the operator: we rotate user-agents at best — could we rotate proxies,
+and would that allow concurrency?
+
+**First, where the 16.2 h of run `20260820-061304` actually went.** Derived from
+its own manifest, not estimated:
+
+| stage | time | concurrent? |
+|---|---|---|
+| Bookme harvest (12 base + 16 escalation shapes) | 4 920 s (1.4 h) | **yes** — 8 workers |
+| Agoda matching + Booking gap-fill, 1500 hotels | 53 445 s (14.8 h) | **no** — strictly serial |
+
+That is **35.6 s per hotel**, serial. At the measured ~14.6 Agoda requests per
+cold hotel and a mean jittered gap of 1.86 s (`MIN_INTERVAL` 1.5 × D-58's
+measured +24%), **~27 s of those 35.6 s is the pacer deliberately waiting** —
+roughly **76% of wall clock is self-imposed delay**, not work.
+
+So the operator's instinct is right: this is the lever, and it is a big one.
+
+**Why concurrency alone (no proxies) would be a regression.** The pacer is not
+arbitrary politeness — it exists because Agoda throttles per source IP. Running
+N threads from one IP does not get N× throughput; it reaches the block N× sooner
+and then everything stalls behind the same cooldown. D-59 already recorded a
+weaker version of this: merely removing the download pauses between requests
+(the two-phase split) made the stream denser and contributed to throttling.
+Threads would be that effect multiplied. **Concurrency is only unlocked by
+having more than one identity to be concurrent from.**
+
+**What proxy rotation would actually buy, and cost.**
+
+- *Free / public proxy lists* — not viable. Already-burned IPs, and an untrusted
+  MITM on a session that carries our Bookme credentials. Not a cost question.
+- *Datacenter proxies* (~$1/IP/month, unmetered) — cheap, and likely useless.
+  Agoda's edge blocks known datacenter ASNs aggressively; this needs a
+  10-IP trial before any spend, not a purchase decision.
+- *Residential/mobile pools* (Bright Data, Oxylabs, Smartproxy — ~$3–8/GB) —
+  would work, and would give close to linear speedup: N pools → N parallel
+  Agoda streams, each with its own pace budget and its own UA/cookie identity
+  (the rotation machinery for that already exists in `agoda.session()`).
+  **The cost is metered by bytes, and this pipeline is byte-heavy**: the
+  property payload is 803 KB to reach a 27-byte verdict, ×14.6 requests
+  ≈ 11.7 MB per cold hotel. A full cold Dubai run (2916 hotels) is
+  **~34 GB ≈ $100–270**. A warm re-run (1.0 req/hotel, D-56) is ~2.3 GB ≈ $7–19.
+
+**Two cheaper levers that should be tried FIRST, because they are free and they
+also reduce any future proxy bill:**
+
+1. **Cut requests per hotel** (attacks *time*). `top_n = 5` means up to five
+   803 KB property fetches per hotel, and the ranking already puts same-city
+   candidates first (D-52).
+
+   **CORRECTION — the "~40%" first written here was wrong.** That was 2/5, the
+   share of *candidate slots* removed, mislabelled as a share of total pacing
+   time. The real arithmetic: dropping `top_n` 5 → 3 removes at most **2 of the
+   ~14.6 requests a cold hotel makes**, so the ceiling is **~14%**, not 40%.
+
+   And ~14% is an upper bound that will not be reached, because the candidate
+   loop **breaks early on a strong same-city match** — slots 4 and 5 are only
+   ever fetched for hotels where the first three all failed, which are largely
+   the hotels that end up unmatched anyway. So the saving is real but modest,
+   and it is bought with recall.
+
+   Still worth measuring before touching: the question is *which rank actually
+   wins*, and that needs instrumenting the match loop to record it. Not
+   measurable from the existing artifacts, contrary to what this entry first
+   claimed — they record the winner, not its rank among the candidates.
+2. **Cut bytes per request** (attacks *proxy cost*, not time). 803 KB for
+   `is_nha`, lat, lon and city_id is the pipeline's worst payload-to-value
+   ratio anywhere. If a lighter endpoint carries the same four fields, the
+   proxy bill drops ~10× and the cache gets cheaper too.
+
+**Recommendation:** do (1) first — it is free, offline-measurable, and attacks
+the actual 76%. Treat residential proxies as a real and justified option after
+that, but scoped: a 10-IP trial measuring block rate and effective parallelism
+before committing to a metered plan. **Do not buy datacenter IPs without the
+trial.** Nothing here is built or committed.
+
+---
+
+**D-74 — Audit of every label in the run summary. Four said something other
+than what their counter holds; one said the opposite.**
+
+Prompted by the operator catching a real defect in D-71's own presentation: the
+sub-row "and no bookme rooms either" was hung under the 801 bucket, which reads
+as if the 167 in "listed but zero rooms" were a *different* kind of failure. It
+is not. **Both buckets require `not bm_rooms`** — the 801 via the
+no-agoda-match continue, the 167 via `not ag_rooms and not bm_rooms`. They
+differ only in whether Agoda could identify the property.
+
+That prompted a line-by-line audit of the whole summary. Every row was checked
+against the counter behind it, not against what it sounded like:
+
+| label | what the counter actually holds | fix |
+|---|---|---|
+| `no listing on any platform` | **Only Agoda was asked.** These hotels take the `not bm_rooms` continue, which fires *before* the Booking takeover — Booking never sees them. | `agoda found no listing` |
+| `listed but zero rooms` | Same zero-Bookme-rooms condition as the 801, not a separate class | `agoda listed it, no rooms either platform`, + one shared `(info)` line across both |
+| `bookme had nothing live` | Hotels the harvest never got an **answer** for — an open question, not a stated zero. Read **0** while 968 hotels genuinely had no rooms: the label said the opposite of the truth. | `bookme never answered` |
+| `published` (at the gate) | Nothing is published at the gate — no image fetched, no row written. A `--plan-only` run read exactly like a completed one. | `mapped (nothing published yet)`, and `not published` → `not mapped` to match |
+| `ROOMS · N listings / 532 published hotels` | same | `across 532 hotels` |
+
+**The inventory fact is now stated once, across both buckets, and excludes
+errors** — a hotel that crashed may well have had rooms, so folding it in would
+reintroduce the same category error in the other direction:
+
+```
+  (info) no sellable bookme rooms 968/1500 (65%)  -- BOTH rows above
+```
+
+**Standing rule this establishes:** a summary label is part of the contract, not
+decoration. When a counter's name and its increment site disagree, the label is
+the bug — it is what a reader acts on, and unlike a wrong number it never trips
+the `[MISMATCH]` check. `hotels_unresolved_on_bookme` reading a confident `0`
+through a run where 65% of the window had no inventory is the case in point.
+
+**Follow-up, same session — vague source words are the same bug.** The operator
+then asked what "either platform" referred to, which was a fair hit: the three
+sources are consulted in *different combinations per branch*, so no collective
+noun is readable.
+
+- `no agoda listing; bookme had 0 rooms` — asked **Agoda only**. Booking is
+  never reached: the `not bm_rooms` continue fires first, and Booking only fills
+  rooms Bookme already sells. The row now says so inline, because "why wasn't
+  Booking tried here" is a question this file has now been asked twice.
+- `agoda listed it; 0 rooms on agoda AND bookme` — condition is literally
+  `not ag_rooms and not bm_rooms`. Two sources, both named.
+- `(info) bookme itself returned 0 rooms` — Bookme, across every probed shape.
+- Per-hotel log line "no rooms on either platform" → "no rooms on agoda or
+  bookme".
+
+**Rule:** name the sources a branch actually queried. Never "either", "any", or
+"both" platform — the reader cannot tell which two of three were consulted, and
+in this pipeline it is a different pair on every branch.
+
+No counter's *value* changed across either pass. Nine labels and one placement did.
+
+---
+
+**D-75 — MEASURED: the Booking takeover almost never finds photographs, and
+`hotels_mapped` was counting hotels that got none.**
+
+The operator asked what actually happens when Agoda finds no match but the
+hotel *does* have Bookme rooms — does Booking cover it? That path exists
+(D-37's takeover) and fires correctly. Measured live on the first 106 hotels of
+run `20260821-122343`:
+
+| | hotels | rooms planned | rooms with a photo | hotels with **zero** photos |
+|---|---|---|---|---|
+| agoda identified the hotel | 84 | 3281 | 2916 (**88.9%**) | 3 |
+| agoda-blind (booking took over) | 8 | 243 | 93 (**38.3%**) | **7 of 8** |
+
+**All 93 of those photos came from one hotel** (`mercure hotel suites &
+apartments`, 104 rooms → 93 photographed). The other seven — `al waleed
+palace`, `copthorne lakeview`, `al bustan residence`, `pearl residence`, `the
+address montgomerie`, `jumeirah creekside` (87 rooms!), `downtown hotel` —
+returned **zero images each**.
+
+**Why, and it is not a bug.** These are precisely the hotels whose names defeat
+matching: Agoda rejected `The Weekend Address` for `the address montgomerie
+dubai`, and `jumeirah creekside dubai` cleared no candidate at all.
+`resolve_verified` then applies a *stricter* pair of gates (name ≥90 against the
+title, ≤250 m). A name too awkward for Agoda's matcher is usually too awkward
+for Booking's too. **The takeover is worth keeping — it rescued 93 rooms that
+would otherwise have none — but it is a long shot, not a safety net.**
+
+**The reporting defect this exposed.** Those seven hotels each incremented
+`hotels_mapped`. "Mapped" says a plan was produced; it does **not** say
+anything was found. So the headline number included hotels that delivered no
+imagery whatsoever — the single thing this pipeline exists to deliver. Ten of
+the first 92 mapped hotels (11%) were in that state.
+
+Added `hotels_mapped_no_photo`, reported directly under the mapped total:
+
+```
+  mapped (nothing published yet) 92/106
+    ├─ agoda identified it     84
+    └─ agoda-blind (bookme+booking only) 8
+    (of which found NO photo at all) 10   -- rooms planned, zero imagery; mostly agoda-blind
+```
+
+Placed under HOTELS, not in the ROOMS block, deliberately: room-level coverage
+is already reported there, and an 85% room average **averages away** the
+harsher fact that a whole hotel came away with nothing. Same class of defect as
+D-74 — the number was right, the label implied a success it had not earned.

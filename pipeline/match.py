@@ -128,6 +128,86 @@ PROMO_TRIGGERS = {"off", "valid", "including", "includes", "complimentary",
 # Percentage-off fragments survive tokenisation as a bare number + "off".
 _PCT = re.compile(r"\b\d+\s*%")
 
+# The word "access(ible)" carries TWO unrelated meanings in room names, and the
+# accessibility veto (see ACCESSIBILITY) was reading both as disability access.
+# Measured over the 188 rows of one production run's rooms_review.csv:
+#
+#   * ENTITLEMENT -- "1 King Premium Club Lounge Accessible" is a club-lounge
+#     perk, nothing to do with mobility. 15 rows were capped at the review
+#     ceiling against a Bookme name saying "Club Lounge Access", i.e. the SAME
+#     perk written slightly differently. Rewritten to "club" so the perk is
+#     scored as a perk on both sides instead of as a phantom disagreement.
+#   * DISABILITY, written in vocabulary the veto did not know -- "Superior
+#     Special Needs Room" vs "Superior Accessible Single Room". Both rooms are
+#     accessible, and the pair was held in review because only one side used a
+#     recognised word. Worse, PROMO_NOISE strips "special" as advertising
+#     language, so by the time features() looked, the surviving token was a
+#     bare "needs" and the accessibility signal was gone entirely.
+#
+# Both are fixed by resolving the SENSE here, before token filtering can
+# destroy the evidence. This makes the accessibility veto MORE accurate, not
+# weaker -- it still fires on every genuine one-sided mismatch.
+#
+# The entitlement sense is read off the GRAMMAR, not off a list of facilities,
+# for exactly the reason view_of() gives: what a room grants access TO is
+# whatever the property happens to have -- club lounge, beach, pool, spa, gym,
+# terrace, garden, ski slope, airport shuttle -- so enumerating them is a list
+# that is wrong the moment a property invents a new amenity. Two rules cover
+# the whole class:
+#
+#   * "access" is a NOUN and takes a subject: "<something> access" is access TO
+#     that something. Entitlement, unless the subject is a disability word.
+#   * "accessible" is an ADJECTIVE. Standing on its own, or qualifying the room
+#     ("Accessible Room", "Superior Accessible"), it means disability-adapted.
+#     Given a subject of its own ("Club Lounge Accessible") it is the
+#     entitlement sense written adjectivally.
+#
+# The subject is found by walking backwards to the first word that cannot be
+# one -- room classes, beds and tier words describe the ROOM, not a facility --
+# which is the same walk view_of() does, for the same reason.
+_DISABILITY = {"disabled", "disability", "wheelchair", "mobility",
+               "handicap", "handicapped", "ada", "adapted"}
+# Multi-word disability vocabulary, collapsed first so the walk sees one token.
+# "special needs" matters twice over: PROMO_NOISE strips "special" as
+# advertising language, so left alone the surviving evidence is a bare "needs".
+_DISABILITY_PHRASES = re.compile(
+    r"\bspecial(?:ly)?\s+(?:needs?|abled)\b|\bhandicap(?:ped)?\b|\bwheel\s*chair\b")
+_ACCESS_RE = re.compile(r"\b(access|accessible|accessibility)\b")
+
+
+def resolve_access(n):
+    """Rewrite access/accessible to its SENSE: 'accessible' for disability,
+    nothing at all for an amenity entitlement (the subject is left in place)."""
+    n = _DISABILITY_PHRASES.sub("disabled", n)
+
+    def one(m):
+        word = m.group(1)
+        prev = (n[:m.start()].split() or [None])[-1]
+        if prev in _DISABILITY:
+            return "accessible"
+        if word == "access":
+            # NOUN. "<subject> access" is access TO the subject, and the
+            # subject is an open class -- beach, pool, spa, gym, terrace,
+            # rooftop, marina, ski, whatever the property has. No list can
+            # close it and none is needed: the disability reading is written
+            # "<disability word> access", which the check above already took.
+            # Bare "access" is not a room attribute under either reading.
+            return ""
+        # ADJECTIVE, and here the safe default flips. An unrecognised word in
+        # front proves nothing -- "Cosy Accessible Room" is disability-adapted
+        # and "cosy" is just an adjective, one of an open class of them. So
+        # entitlement is asserted only against PERK_NOISE, the vocabulary this
+        # module already keeps for service entitlements ("Club LOUNGE
+        # Accessible"); everything else reads as disability.
+        #
+        # The asymmetry is deliberate and matches the ACCESSIBILITY rationale:
+        # a wrong "accessible" costs one pair held in the review band where a
+        # human still sees it, while a wrong entitlement auto-publishes a
+        # standard bathroom to the guest who most needs a roll-in shower.
+        return "" if prev in PERK_NOISE else "accessible"
+
+    return re.sub(r"\s+", " ", _ACCESS_RE.sub(one, n)).strip()
+
 # Different words, same rung. Platforms disagree on vocabulary far more often
 # than on meaning -- "Premium Room" vs "Premier Double Room" is one room. Only
 # genuinely interchangeable pairs belong here; anything that reorders a hotel's
@@ -183,6 +263,7 @@ def norm_room(s):
     n = norm(s)
     for pat, rep in SPLIT_WORDS:                   # "de luxe" -> "deluxe"
         n = re.sub(pat, rep, n)
+    n = resolve_access(n)                          # see resolve_access
     toks = [ABBREVIATIONS.get(t, t) for t in n.split()]
     # Cut the advertisement off the end before anything else looks at the
     # tokens -- see PROMO_TRIGGERS. Guarded so a name that opens with a
@@ -234,6 +315,50 @@ def strict_score(a, b):
     if not a or not b:
         return 0.0
     return fuzz.token_sort_ratio(a, b)
+
+
+# Tokens that identify WHICH unit, as opposed to describing it. Two listings
+# from the same operator in the same development differ by exactly these and
+# nothing else -- "Frank Porter - Rimal 1" vs "Frank Porter - Rimal 3" scores
+# 95% on any string metric, and "Goldcrest Views" vs "Goldcrest Views 2" scores
+# 96.6%. Compass words behave identically ("Fairmont Residence South").
+_UNIT_DIRECTIONS = {"north", "south", "east", "west",
+                    "northeast", "northwest", "southeast", "southwest"}
+_DIGIT_RUN = re.compile(r"\d+")
+
+
+def unit_marks(n):
+    """The unit-identifying tokens in an already-normalised name."""
+    return set(_DIGIT_RUN.findall(n)) | (set(n.split()) & _UNIT_DIRECTIONS)
+
+
+def same_listing(a, b, floor, drop=None):
+    """Are these two normalised names THE SAME individual listing?
+
+    Distinct from "the same hotel". A vacation rental that merely name-drops a
+    hotel ("Luxury Burj View 2BR in Kempinski Central Avenue") is a different
+    question from a rental whose title IS the Bookme row's title ("Nasma Luxury
+    Stays - Limestone House"). token_set_ratio scores BOTH at 100 and cannot
+    separate them; token_sort_ratio is length-sensitive and does -- measured
+    over 430 rejections from run 20260820-061304, the name-dropping cases top
+    out at 59 while genuine same-listing pairs sit at 90-100.
+
+    A high score alone is still not enough, because same-operator siblings
+    differ only by a unit number, so those are vetoed outright rather than
+    scored -- the same reasoning CLASSES uses for room class.
+
+    `drop` removes a token that carries no identity here -- in practice the
+    destination, which one platform appends and the other does not. Since the
+    whole comparison is already scoped to one city, the city name is noise that
+    only shortens one side. Not cosmetic: measured over the same 430
+    rejections, dropping it moved three "Kennedy Towers - X [Dubai]" listings
+    from 88-90 to a flat 100 against their Bookme twins, and cost nothing
+    anywhere else (127 rescued vs 124, zero lost).
+    """
+    if drop:
+        pat = rf"\b{re.escape(drop)}\b"
+        a, b = re.sub(pat, " ", a).strip(), re.sub(pat, " ", b).strip()
+    return strict_score(a, b) >= floor and unit_marks(a) == unit_marks(b)
 
 
 def room_score(a, b):
@@ -594,6 +719,78 @@ if __name__ == "__main__":
     assert room_score("Executive Room With Canal View [Executive Room With Canal View Nrb]",
                       "Executive Room with Canal View")[0] == 100
     assert room_score("Zaabeel Room King", "Zaabeel Room Double Queen")[0] < 90
+
+    # --- same_listing: an NHA that IS the row, vs one that name-drops a hotel -
+    # Both score 100 on the recall metric; only strict_score plus the unit-mark
+    # veto separates them. Pairs are real, from run 20260820-061304.
+    for a, b in [("nasma luxury stays limestone house",
+                  "Nasma Luxury Stays - Limestone House"),
+                 ("torch tower by deluxe holiday homes",
+                  "The Torch Tower by Deluxe Holiday Homes")]:
+        assert same_listing(norm(a), norm(b), 90), (a, b)
+    for a, b in [  # name-dropping: the case the isNHA flag exists for
+                 ("kempinski central avenue",
+                  "Luxury Burj View 2BR in Kempinski Central Avenue Downtown Dubai"),
+                 ("bloom tower", "Dubai JVC - Bloom Tower B - Balcony, Gym"),
+                   # same operator, different unit -- vetoed on the mark, not scored
+                 ("frank porter rimal 3", "Frank Porter - Rimal 1"),
+                 ("frank porter goldcrest views", "Frank Porter - Goldcrest Views 2"),
+                 ("frank porter fairmont residences",
+                  "Frank Porter - Fairmont Residence South")]:
+        assert not same_listing(norm(a), norm(b), 90), (a, b)
+    # the destination is noise on one side, never identity
+    assert not same_listing(norm("kennedy towers cayan tower"),
+                            norm("Kennedy Towers - Cayan Tower [Dubai]"), 90)
+    assert same_listing(norm("kennedy towers cayan tower"),
+                        norm("Kennedy Towers - Cayan Tower [Dubai]"), 90, drop="dubai")
+    # ...but dropping it must not erase a unit mark
+    assert not same_listing(norm("kennedy towers cayan tower"),
+                            norm("Kennedy Towers - Cayan Tower 2 [Dubai]"), 90,
+                            drop="dubai")
+
+    # --- resolve_access: "access(ible)" means two different things -----------
+    # ENTITLEMENT. Deliberately tested against facilities the code never names,
+    # because the rule is grammatical -- if this only passed for "club lounge"
+    # it would be a lookup table with extra steps.
+    for t in ["Deluxe Room with Private Beach Access",
+              "Villa with Direct Pool Access", "Superior Room Spa Access",
+              "Studio with Gym Access", "Suite Garden Access",
+              "Chalet Ski Access", "Room with Terrace Access",
+              "Room with Rooftop Access", "Suite with Marina Access",
+              "Deluxe Room Airport Shuttle Access",
+              "1 King Premium Club Lounge Accessible"]:
+        assert features(t)["accessible"] is False, t
+    # ...and the pair that motivated it: the same perk, written two ways.
+    for a, b in [("1 King Bed Premium Room Club Access",
+                  "1 King Premium Club Lounge Accessible"),
+                 ("Signature Suite Club Lounge Access Creek View",
+                  "Signature Suite Club Lounge Accessible Creek")]:
+        assert features(a)["accessible"] == features(b)["accessible"] is False, (a, b)
+    # DISABILITY, in every vocabulary and position seen in production. The
+    # "1 King Bed, Accessible" case is why the subject walk stops on
+    # GENERIC_TOKENS rather than a hand-written list -- "bed" was missing from
+    # one, and the marker was silently read as access TO a bed.
+    for t in ["Accessible King Room", "Room, 1 King Bed, Accessible",
+              "ADA Accessible Queen", "Wheelchair Accessible Studio",
+              "King Room Mobility Accessible", "Deluxe King - Disabled Access",
+              "Double Or Twin Accessible Superior", "Studio De Luxe Accessible",
+              "Premium Room, 1 Queen Bed, Accessible"]:
+        assert features(t)["accessible"] is True, t
+    # Disability, written in vocabulary the raw token set did not cover. Note
+    # PROMO_NOISE strips "special", so this MUST resolve before token filtering.
+    # "special" is PROMO_NOISE, so without the early phrase collapse the only
+    # surviving token here is a bare "needs" and the marker is gone for good.
+    assert "needs" not in norm_room("Superior Special Needs Room")
+    assert features("Superior Special Needs Room")["accessible"] is True
+    for a, b in [("Superior Accessible Single Room", "Superior Special Needs Room"),
+                 ("Superior Room Disabled Adapted", "Superior Accessible Room")]:
+        assert features(a)["accessible"] == features(b)["accessible"] is True, (a, b)
+    # A GENUINE one-sided mismatch still holds the pair back -- the safety
+    # decision this vocabulary work makes more accurate, not weaker.
+    assert features("Superior Room (Accessible)")["accessible"] is True
+    assert features("Superior Double Room")["accessible"] is False
+    assert room_match("Superior Room (Accessible)", "Superior Double Room")[0] \
+        <= ROOM_ACCEPT_CEILING
 
     # class disagreement must veto however similar the strings look
     assert room_match("Executive Suite", "Executive Room")[1], "suite/room not vetoed"
