@@ -249,7 +249,7 @@ LEDGER_STALE_DAYS = 365
 # Agoda routinely publishes 15-30 near-identical shots of one room; past the
 # first handful they are the same bed from a different corner, and every one
 # costs a download AND an upload.
-MAX_IMAGES_PER_ROOM = 6
+MAX_IMAGES_PER_ROOM = 15
 
 # Below this many bytes an "image" is a placeholder, a spacer or an error page
 # rendered as a JPEG -- cheap to detect, expensive to discover on the live site.
